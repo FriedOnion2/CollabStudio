@@ -1,6 +1,7 @@
 import { api, showToast, createDocsPanel } from './docs-panel.js';
 import { createCliPanel, populateModelSelect, populateEffortSelect } from './cli-panel.js';
 import { createDiscussionPanel } from './discussion-panel.js';
+import { createPreviewPanel } from './preview-panel.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -82,12 +83,36 @@ const discussionPanel = createDiscussionPanel({
   }
 });
 
+const previewPanel = createPreviewPanel({
+  getActiveDir: () => state.activeDir,
+  onSendRework: (promptText) => {
+    const box = $('promptBox');
+    box.value = promptText;
+    $('btnResetPrompt').classList.remove('hidden');
+    box.focus();
+    box.scrollTop = 0;
+  },
+  onFeedbackSaved: () => refreshActive(true),
+  onApproveCurrentGate: async () => {
+    const stageNum = state.detail?.project?.state?.stage || 1;
+    const key = `g${stageNum}`;
+    await patchState({ gates: { [key]: true } });
+    showToast(`已验收通过，阶段 ${stageNum} 门禁已勾选！`);
+  }
+});
+
 const cliPanel = createCliPanel({
   getActiveDir: () => state.activeDir,
   getPromptText: () => $('promptBox').value,
   getActiveStage: () => state.detail?.project?.state?.stage || 1,
   onRunFinished: (run) => {
-    if (dirEq(state.activeDir, run.dir)) refreshActive(true);
+    if (dirEq(state.activeDir, run.dir)) {
+      refreshActive(true);
+      previewPanel.refreshIfLoaded();
+    }
+  },
+  onRightTabChanged: (tab) => {
+    if (tab === 'preview' && state.activeDir) previewPanel.load(state.activeDir, { autoReload: false });
   },
   onCatalogUpdated: ({ clis, catalog }) => {
     discussionPanel.setCatalog({ clis, catalog });
@@ -121,6 +146,7 @@ function connectEvents() {
       const evt = JSON.parse(e.data);
       cliPanel.handleSseEvent(evt);
       discussionPanel.handleSseEvent(evt);
+      previewPanel.handleSseEvent(evt);
     } catch {}
   };
   es.onerror = () => {
@@ -603,7 +629,12 @@ async function selectProject(dir, preserveDoc = false) {
   state.activeDir = dir;
   state.lastSyncedStage = null;
   renderSidebar();
-  await Promise.all([refreshActive(preserveDoc), cliPanel.loadRuns(dir), discussionPanel.load(dir)]);
+  await Promise.all([
+    refreshActive(preserveDoc),
+    cliPanel.loadRuns(dir),
+    discussionPanel.load(dir),
+    previewPanel.load(dir, { autoReload: false })
+  ]);
 }
 
 async function refreshActive(preserveDoc = true) {

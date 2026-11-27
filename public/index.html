@@ -148,13 +148,17 @@
             <div class="card-head">
               <div class="right-mode-tabs">
                 <button id="tabRightDiscuss" class="mode-tab active" type="button">
-                  需求与方案讨论
+                  需求讨论
                   <span id="discTabBadge" class="cli-tab-badge hidden"></span>
                 </button>
-                <button id="tabRightDocs" class="mode-tab" type="button">交接文档 SSOT</button>
+                <button id="tabRightDocs" class="mode-tab" type="button">SSOT 文档</button>
                 <button id="tabRightCli" class="mode-tab" type="button">
-                  CLI 终端输出
+                  CLI 终端
                   <span id="cliTabBadge" class="cli-tab-badge hidden"></span>
+                </button>
+                <button id="tabRightPreview" class="mode-tab" type="button">
+                  交付验收
+                  <span id="previewTabBadge" class="cli-tab-badge hidden"></span>
                 </button>
               </div>
               <div id="discussHeaderActions" class="inline-actions">
@@ -174,6 +178,11 @@
                 <button id="btnFixCli" class="btn btn-sm hidden" type="button" title="自动带上本次报错日志填入指令框以便纠错">🔧 纠错</button>
                 <button id="btnRollbackRun" class="btn btn-sm hidden" type="button" title="一键恢复到本次 CLI 运行前的文档快照">↶ 回退</button>
                 <button id="btnCopyCliOutput" class="btn btn-sm" type="button">复制</button>
+              </div>
+              <div id="previewHeaderActions" class="inline-actions hidden">
+                <button id="btnRescanDeliverables" class="btn btn-sm" type="button" title="重新扫描项目产物与脚本">🔄 扫描</button>
+                <button id="btnReloadPreview" class="btn btn-sm" type="button">↻ 刷新</button>
+                <button id="btnOpenPreviewExternal" class="btn btn-primary btn-sm" type="button">↗ 浏览器打开</button>
               </div>
             </div>
 
@@ -216,6 +225,46 @@
               </div>
               <div id="cliRunMeta" class="cli-run-meta mono-path"></div>
               <pre id="cliConsole" class="cli-console"></pre>
+            </div>
+
+            <div id="previewPane" class="right-pane hidden">
+              <div class="preview-toolbar">
+                <select id="previewTargetSelect" class="select-sm preview-target-sel" title="选择要预览的交付页面或自定义本机地址"></select>
+                <select id="previewViewportSelect" class="select-sm preview-vp-sel" title="切换验收视口宽度">
+                  <option value="auto">视口：自适应</option>
+                  <option value="desktop">桌面 1280px</option>
+                  <option value="tablet">平板 768px</option>
+                  <option value="mobile">手机 390px</option>
+                </select>
+              </div>
+              <div id="previewScriptsBar" class="preview-scripts-bar"></div>
+              <div id="previewRecentBox" class="preview-recent-box hidden"></div>
+              <div id="previewScriptLogBox" class="preview-script-log-box hidden">
+                <div class="preview-script-log-head">
+                  <span id="previewScriptTitle" class="muted"></span>
+                  <div class="inline-actions">
+                    <button id="btnUseDetectedUrl" class="btn btn-emerald btn-sm hidden" type="button"></button>
+                    <button id="btnStopPreviewScript" class="btn btn-danger btn-sm hidden" type="button">■ 停止</button>
+                    <button id="btnCloseScriptLog" class="btn-link" type="button">✕</button>
+                  </div>
+                </div>
+                <pre id="previewScriptLog" class="preview-script-log"></pre>
+              </div>
+              <div id="previewEmpty" class="preview-empty">
+                <div class="disc-empty">
+                  <div class="disc-empty-title">👁 交付效果实时预览与验收</div>
+                  <p>当前项目尚未扫描到 <code>.html</code> 原型或构建产物。你可以通过上方「快捷验证」启动本地开发服务，或从下拉框选择「+ 输入自定义本机地址」直接预览 <code>http://localhost:...</code>。</p>
+                </div>
+              </div>
+              <div id="previewFrameWrap" class="preview-frame-wrap hidden" data-viewport="auto">
+                <iframe id="previewFrame" class="preview-frame" allow="fullscreen; autoplay; gamepad"></iframe>
+              </div>
+              <div class="preview-feedback-bar">
+                <input id="previewFeedbackInput" class="preview-feedback-input" type="text" placeholder="记录验收问题（例如：主舞台太暗 / 按钮位置重叠 / 某交互报错）…" />
+                <button id="btnLogFeedback" class="btn btn-sm" type="button" title="追加结构化验收单到 docs/05-review-log.md">📝 记验收单</button>
+                <button id="btnReworkFeedback" class="btn btn-amber btn-sm" type="button" title="记入验收单并立即填入左侧口令框派给模型返工">🔧 发给模型返工</button>
+                <button id="btnApproveGate" class="btn btn-emerald btn-sm" type="button" title="确认当前阶段交付满意并勾选门禁通过">✓ 验收通过</button>
+              </div>
             </div>
           </section>
         </div>

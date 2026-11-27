@@ -109,15 +109,19 @@ export function createCliPanel({
     const isDiscuss = tab === 'discuss';
     const isDocs = tab === 'docs';
     const isCli = tab === 'cli';
+    const isPreview = tab === 'preview';
     $('tabRightDiscuss').classList.toggle('active', isDiscuss);
     $('tabRightDocs').classList.toggle('active', isDocs);
     $('tabRightCli').classList.toggle('active', isCli);
+    $('tabRightPreview').classList.toggle('active', isPreview);
     $('discussPane').classList.toggle('hidden', !isDiscuss);
     $('docsPane').classList.toggle('hidden', !isDocs);
     $('cliPane').classList.toggle('hidden', !isCli);
+    $('previewPane').classList.toggle('hidden', !isPreview);
     $('discussHeaderActions').classList.toggle('hidden', !isDiscuss);
     $('docsHeaderActions').classList.toggle('hidden', !isDocs);
     $('cliHeaderActions').classList.toggle('hidden', !isCli);
+    $('previewHeaderActions').classList.toggle('hidden', !isPreview);
     if (isCli) scrollConsoleToBottom(true);
     if (onRightTabChanged) onRightTabChanged(tab);
   }
@@ -487,6 +491,7 @@ export function createCliPanel({
   $('tabRightDiscuss').onclick = () => setRightTab('discuss');
   $('tabRightDocs').onclick = () => setRightTab('docs');
   $('tabRightCli').onclick = () => setRightTab('cli');
+  $('tabRightPreview').onclick = () => setRightTab('preview');
 
   $('cliModeSelect').onchange = (e) => {
     state.mode = e.target.value;

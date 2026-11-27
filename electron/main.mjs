@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -63,6 +63,15 @@ ipcMain.handle('dialog:pickFiles', async () => {
     properties: ['openFile', 'multiSelections']
   });
   return res.canceled ? [] : (res.filePaths || []);
+});
+
+ipcMain.handle('shell:openExternal', async (_event, targetUrl) => {
+  const u = String(targetUrl || '').trim();
+  if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(u)) {
+    throw new Error('仅允许在系统浏览器打开本机预览地址');
+  }
+  await shell.openExternal(u);
+  return true;
 });
 
 app.whenReady().then(createWindow);

@@ -20,6 +20,10 @@ import {
   buildDiscussionPrompt, finalizePlanToBrief
 } from './lib/discussion.mjs';
 import { createSnapshot, listSnapshots, restoreSnapshot } from './lib/snapshots.mjs';
+import {
+  scanDeliverables, resolvePreviewFile, runDeliverableScript,
+  stopDeliverableScript, stopAllDeliverableScripts, appendAcceptanceFeedback
+} from './lib/preview.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -136,9 +140,70 @@ const server = http.createServer(async (req, res) => {
 
     if (p === '/api/shutdown' && req.method === 'POST') {
       stopAllRuns();
+      stopAllDeliverableScripts();
       sendJson(res, 200, { ok: true });
       setTimeout(() => process.exit(0), 150);
       return;
+    }
+
+    if (p === '/api/open-url' && req.method === 'POST') {
+      const { targetUrl } = await readBody(req);
+      const u = String(targetUrl || '').trim();
+      if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(u)) {
+        return sendJson(res, 400, { error: '仅允许打开本机预览地址' });
+      }
+      if (process.platform === 'win32') {
+        const child = spawn('cmd.exe', ['/c', 'start', '', u], { detached: true, stdio: 'ignore' });
+        child.on('error', () => {});
+        child.unref();
+      } else {
+        const cmd = process.platform === 'darwin' ? 'open' : 'xdg-open';
+        const child = spawn(cmd, [u], { detached: true, stdio: 'ignore' });
+        child.on('error', () => {});
+        child.unref();
+      }
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (p.startsWith('/preview/') && req.method === 'GET') {
+      const rest = p.slice('/preview/'.length);
+      const slashIdx = rest.indexOf('/');
+      const mountId = slashIdx >= 0 ? rest.slice(0, slashIdx) : rest;
+      const relPath = slashIdx >= 0 ? rest.slice(slashIdx + 1) : '';
+      const resolved = resolvePreviewFile(mountId, relPath);
+      if (!resolved) {
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        return res.end('Preview file not found');
+      }
+      res.writeHead(200, { 'Content-Type': resolved.mime, 'Cache-Control': 'no-store' });
+      fs.createReadStream(resolved.full).pipe(res);
+      return;
+    }
+
+    if (p === '/api/deliverables' && req.method === 'GET') {
+      const dir = url.searchParams.get('dir');
+      if (!dir) return sendJson(res, 400, { error: '缺少 dir 参数' });
+      return sendJson(res, 200, scanDeliverables(dir));
+    }
+
+    if (p === '/api/deliverables/run-script' && req.method === 'POST') {
+      const { dir, scriptId } = await readBody(req);
+      if (!dir || !scriptId) return sendJson(res, 400, { error: '缺少参数' });
+      const activeScript = runDeliverableScript({ dir, scriptId }, broadcastEvent);
+      return sendJson(res, 200, { activeScript });
+    }
+
+    if (p === '/api/deliverables/stop-script' && req.method === 'POST') {
+      const { dir } = await readBody(req);
+      if (!dir) return sendJson(res, 400, { error: '缺少 dir 参数' });
+      return sendJson(res, 200, stopDeliverableScript(dir, broadcastEvent));
+    }
+
+    if (p === '/api/deliverables/feedback' && req.method === 'POST') {
+      const { dir, target, note } = await readBody(req);
+      if (!dir) return sendJson(res, 400, { error: '缺少 dir 参数' });
+      const resData = appendAcceptanceFeedback({ dir, target, note });
+      return sendJson(res, 200, resData);
     }
 
     if (p === '/api/cli/status' && req.method === 'GET') {
@@ -540,7 +605,10 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.on('close', stopAllRuns);
+server.on('close', () => {
+  stopAllRuns();
+  stopAllDeliverableScripts();
+});
 
 export function startServer(port = PORT, host = HOST) {
   return new Promise((resolve, reject) => {

@@ -194,6 +194,27 @@ code, .mono-path, .doc-editor, .prompt-box { font-family: "Cascadia Code", "JetB
 .snap-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .snap-title { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .snap-sub { font-size: 11px; color: var(--muted); }
+
+.preview-toolbar { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+.preview-target-sel { flex: 1; max-width: none; min-width: 140px; }
+.preview-vp-sel { flex: 0 0 116px; min-width: 108px; }
+.preview-scripts-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.preview-recent-box { max-height: 128px; overflow-y: auto; background: #0a0f18; border: 1px solid var(--border); border-radius: 7px; padding: 6px 8px; margin-bottom: 6px; display: flex; flex-direction: column; gap: 3px; }
+.recent-file-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 5px; font-size: 11.5px; }
+.recent-file-row.clickable { cursor: pointer; }
+.recent-file-row.clickable:hover { background: var(--surface-2); }
+.preview-script-log-box { background: #090d14; border: 1px solid var(--border); border-radius: 7px; padding: 6px 8px; margin-bottom: 6px; display: flex; flex-direction: column; gap: 4px; }
+.preview-script-log-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.preview-script-log { margin: 0; max-height: 96px; overflow: auto; font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace; font-size: 11px; line-height: 1.45; color: #cbd5e1; white-space: pre-wrap; word-break: break-word; }
+.preview-empty { flex: 1; display: grid; place-items: center; background: #090d14; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 7px; }
+.preview-frame-wrap { flex: 1; min-height: 220px; background: #05070c; border: 1px solid var(--border); border-radius: 8px; overflow: auto; display: flex; justify-content: center; margin-bottom: 7px; }
+.preview-frame { width: 100%; height: 100%; border: none; background: #0b0e14; transition: width .15s; }
+.preview-frame-wrap[data-viewport="desktop"] .preview-frame { width: 1280px; min-width: 1280px; }
+.preview-frame-wrap[data-viewport="tablet"] .preview-frame { width: 768px; min-width: 768px; border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+.preview-frame-wrap[data-viewport="mobile"] .preview-frame { width: 390px; min-width: 390px; border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+.preview-feedback-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; background: #0e1420; border: 1px solid var(--border); border-radius: 8px; padding: 7px 8px; }
+.preview-feedback-input { flex: 1; min-width: 180px; background: #090d14; border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 5px 9px; font-size: 12.5px; outline: none; }
+.preview-feedback-input:focus { border-color: var(--agy); }
 .btn-emerald { background: #103b2c; border-color: #1f7a5a; color: #a7f3d0; font-weight: 600; }
 .btn-emerald:hover { background: #154e3a; border-color: var(--codex); }
 .cli-tab-badge.locked { background: #103227; color: var(--codex); }

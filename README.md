@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.1-3b82f6?style=flat-square" alt="version" />
+  <img src="https://img.shields.io/badge/version-1.2.0-3b82f6?style=flat-square" alt="version" />
   <img src="https://img.shields.io/badge/runtime-Electron%20%7C%20Node.js%2018%2B-10b981?style=flat-square" alt="runtime" />
   <img src="https://img.shields.io/badge/dependencies-Zero%20Runtime%20Deps-f59e0b?style=flat-square" alt="zero-deps" />
   <img src="https://img.shields.io/badge/license-MIT-64748b?style=flat-square" alt="license" />
@@ -66,7 +66,12 @@
 | **Claude CLI** | `--model <model>` | `--effort <effort>` | `--permission-mode auto` / `--dangerously-skip-permissions` |
 | **Antigravity (`agy`)** | `--model <model>` | `--effort <effort>` | `--mode auto` / `--dangerously-skip-permissions` |
 
-### 5. 内置多模型协作方法论
+### 5. 交付验收与实时预览（零 CORS 闭环）
+- **自动扫描交付物与脚本**：自动发现项目内 `prototypes/**/*.html`、`dist/` 构建页面、`package.json` 脚本、`tools/serve.mjs` 及最近产出的文件。
+- **内置零 CORS HTTP 预览 + 多端视口**：通过 `/preview/<mountId>/...` 同源 HTTP 托管，WebGL2 / ES Modules / Web Audio 零跨域报错；支持在右侧直接内嵌预览、切换 `自适应 / 桌面 1280 / 平板 768 / 手机 390` 视口，或一键 **「↗ 浏览器打开」**。
+- **验收闭环返工**：预览栏底部支持一键 **「📝 记验收单」**（追加至 `docs/05-review-log.md`）、**「🔧 发给模型返工」**（记入验收单并填入左侧返工指令）及 **「✓ 验收通过」**（勾选当前阶段门禁）。
+
+### 6. 内置多模型协作方法论
 - **独立双方案合并（Blind Draft）**：大规划时让 Gemini 与 Claude 各自只看原始需求独立出方案，核实后再合并，避免锚定偏差。
 - **界面文案与交互润色**：初版 UI 完成后一键发给 Gemini 去掉 AI 机械解释文案，改成说人话的产品表达。
 - **两级分级审查（≤ 2 轮防死循环）**：只有会导致算错钱、丢数据、越权、发错消息或发布事故且有明确复现路径的问题才算 Blocker 挡上线；其余作为 Suggestion 记录。
