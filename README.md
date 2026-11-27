@@ -4,7 +4,7 @@
 
 <h1 align="center">CollabStudio</h1>
 
-<p align="center">简体中文 · <a href="README.en.md">English</a></p>
+<p align="center">简体中文 · <a href="README.en.md">English</a> · <a href="USER_GUIDE.md">📖 完整使用指南</a></p>
 
 <p align="center">
   <strong>Antigravity (Gemini) × Claude × Codex (GPT) 三端 AI 协同开发桌面控制台</strong><br/>
