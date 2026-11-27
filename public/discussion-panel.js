@@ -20,8 +20,17 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
     effort: 'high',
     discussion: { planLocked: false, attachments: [], messages: [] },
     activeRunId: null,
-    streamingMsgId: null
+    streamingMsgId: null,
+    liveActivity: '',
+    livePid: null,
+    liveStartedAt: null
   };
+
+  function fmtElapsed(startedAt) {
+    if (!startedAt) return '00:00';
+    const sec = Math.max(0, Math.floor((Date.now() - Date.parse(startedAt)) / 1000));
+    return `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+  }
 
   function getCliInfo(id) {
     return state.clis.find((c) => c.id === id);
@@ -113,19 +122,29 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
           <div class="disc-msg-body">${esc(m.content)}</div>`;
       } else {
         const metaTags = [m.cliLabel || m.cli || '模型', m.model, m.effort ? `思考:${m.effort}` : ''].filter(Boolean).join(' · ');
-        const pendingTag = m.pending ? '<span class="disc-thinking">思考输出中…</span>' : '';
+        const isLive = Boolean(m.pending);
+        const liveText = isLive
+          ? `${state.liveActivity || '正在连接 CLI 思考…'} · ${fmtElapsed(state.liveStartedAt || m.createdAt)}${state.livePid ? ` · PID ${state.livePid}` : ''}`
+          : '';
+        const pendingTag = isLive
+          ? `<span class="disc-thinking"><span class="live-pulse"></span><span class="disc-live-label">${esc(liveText)}</span></span>`
+          : (m.status === 'failed' ? '<span class="disc-failed-tag">失败</span>' : '');
         card.innerHTML = `
           <div class="disc-msg-head">
             <span class="disc-model-tag tag-${esc(m.cli || 'codex')}">${esc(metaTags)}</span>
             <div class="inline-actions">${pendingTag}<span class="muted">${timeStr}</span></div>
           </div>
-          <div class="disc-msg-body">${esc(m.content || (m.pending ? '正在等待模型响应…' : ''))}</div>
-          ${m.pending ? '' : `<div class="disc-msg-actions">
+          <div class="disc-msg-body">${esc(m.content || (isLive ? 'CLI 已启动并正在工作，模型开始吐字后会实时显示在这里…' : ''))}</div>
+          ${isLive
+            ? `<div class="disc-msg-actions"><button type="button" class="btn-link act-stop" style="color:var(--danger)">■ 停止本轮</button></div>`
+            : `<div class="disc-msg-actions">
             <button type="button" class="btn-link act-copy">复制</button>
             <button type="button" class="btn-link act-brief">仅写入 01-brief</button>
             <button type="button" class="btn-link act-prod">采纳并进入生产 →</button>
           </div>`}`;
-        if (!m.pending) {
+        if (isLive) {
+          card.querySelector('.act-stop').onclick = stopDiscussionRun;
+        } else {
           card.querySelector('.act-copy').onclick = async () => {
             await navigator.clipboard.writeText(m.content || '');
             showToast('已复制方案回复');
@@ -253,10 +272,14 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
       state.discussion = res.discussion;
       state.activeRunId = res.run.id;
       state.streamingMsgId = res.assistantMsg.id;
+      state.liveActivity = res.run.activity || '进程已启动，等待 CLI 响应…';
+      state.livePid = res.run.pid || null;
+      state.liveStartedAt = res.run.startedAt || new Date().toISOString();
       renderMessages(true);
     } catch (e) {
       input.value = message;
       showToast(e.message);
+      if (state.dir) load(state.dir);
     }
   }
 
@@ -310,6 +333,15 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
 
   function handleSseEvent(evt) {
     if (!evt || !evt.type) return;
+    if (evt.type === 'cli:activity' && evt.runId && evt.runId === state.activeRunId) {
+      state.liveActivity = evt.activity || state.liveActivity;
+      if (evt.pid) state.livePid = evt.pid;
+      const lbl = document.querySelector('.disc-live-label');
+      if (lbl) {
+        lbl.textContent = `${state.liveActivity} · ${fmtElapsed(state.liveStartedAt)}${state.livePid ? ` · PID ${state.livePid}` : ''}`;
+      }
+      return;
+    }
     if (evt.type === 'cli:output' && evt.runId && evt.runId === state.activeRunId) {
       const msg = (state.discussion.messages || []).find((m) => m.id === state.streamingMsgId);
       if (msg) {
@@ -321,15 +353,29 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
     if (evt.type === 'cli:exit' && evt.run && evt.run.id === state.activeRunId) {
       state.activeRunId = null;
       state.streamingMsgId = null;
+      state.liveActivity = '';
+      state.livePid = null;
+      state.liveStartedAt = null;
       if (state.dir) load(state.dir);
       return;
     }
     if (evt.type === 'discussion:updated' && state.dir && evt.dir?.toLowerCase() === state.dir.toLowerCase()) {
       state.activeRunId = null;
       state.streamingMsgId = null;
+      state.liveActivity = '';
+      state.livePid = null;
+      state.liveStartedAt = null;
       load(state.dir);
     }
   }
+
+  setInterval(() => {
+    if (!state.activeRunId) return;
+    const lbl = document.querySelector('.disc-live-label');
+    if (lbl) {
+      lbl.textContent = `${state.liveActivity || 'CLI 正在工作中…'} · ${fmtElapsed(state.liveStartedAt)}${state.livePid ? ` · PID ${state.livePid}` : ''}`;
+    }
+  }, 1000);
 
   // Bind controls
   $('discModelSelect').onchange = (e) => {
