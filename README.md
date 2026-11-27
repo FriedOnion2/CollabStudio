@@ -62,7 +62,7 @@
 
 | CLI | 模型参数 | 思考 / 推理强度参数 | 自动放行 / 完全免确认 |
 | :--- | :--- | :--- | :--- |
-| **Codex CLI** | `-m <model>` | `-c model_reasoning_effort="<effort>"` | `--full-auto` / `--dangerously-bypass-approvals-and-sandbox` |
+| **Codex CLI** | `-m <model>` | `-c model_reasoning_effort="<effort>"` | `-s workspace-write -c approval_policy="never"` / `--dangerously-bypass-approvals-and-sandbox` |
 | **Claude CLI** | `--model <model>` | `--effort <effort>` | `--permission-mode auto` / `--dangerously-skip-permissions` |
 | **Antigravity (`agy`)** | `--model <model>` | `--effort <effort>` | `--mode auto` / `--dangerously-skip-permissions` |
 
