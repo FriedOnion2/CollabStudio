@@ -25,9 +25,9 @@ CollabStudio is a desktop workbench for developing software with Antigravity (Ge
 
 | CLI | Model | Reasoning effort | Auto-edit / skip confirmation |
 | --- | --- | --- | --- |
-| Codex | `-m <model>` | `-c model_reasoning_effort="<effort>"` | `--full-auto` / `--dangerously-bypass-approvals-and-sandbox` |
-| Claude | `--model <model>` | `--effort <effort>` | `--permission-mode acceptEdits` / `--dangerously-skip-permissions` |
-| Antigravity | `--model <model>` | `--effort <effort>` | `--mode accept-edits` / `--dangerously-skip-permissions` |
+| Codex | `-m <model>` | `-c model_reasoning_effort="<effort>"` | `-s workspace-write -c approval_policy="never"` / `--dangerously-bypass-approvals-and-sandbox` |
+| Claude | `--model <model>` | `--effort <effort>` | `--permission-mode auto` / `--dangerously-skip-permissions` |
+| Antigravity | `--model <model>` | `--effort <effort>` | `--mode auto` / `--dangerously-skip-permissions` |
 
 ## Project files
 
