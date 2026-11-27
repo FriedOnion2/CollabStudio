@@ -1,6 +1,6 @@
 {
   "name": "collab-studio",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Standalone desktop workbench for Antigravity × Claude × Codex collaborative software development",
   "type": "module",
   "main": "electron/main.mjs",

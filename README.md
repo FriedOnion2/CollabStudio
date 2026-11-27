@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.0-3b82f6?style=flat-square" alt="version" />
+  <img src="https://img.shields.io/badge/version-1.2.1-3b82f6?style=flat-square" alt="version" />
   <img src="https://img.shields.io/badge/runtime-Electron%20%7C%20Node.js%2018%2B-10b981?style=flat-square" alt="runtime" />
   <img src="https://img.shields.io/badge/dependencies-Zero%20Runtime%20Deps-f59e0b?style=flat-square" alt="zero-deps" />
   <img src="https://img.shields.io/badge/license-MIT-64748b?style=flat-square" alt="license" />
@@ -50,7 +50,7 @@
 - **自动探测本机 CLI**：自动发现本机 `Codex CLI`、`Claude Code CLI` 与 `Antigravity (agy) CLI`，并支持在「⚙ 配置」弹窗中自定义路径与默认附加参数（数据保存在独立用户目录，与 **CC Switch** 等环境切换工具完全隔离兼容）。
 - **随时手动切换执行端**：左侧口令框支持直接编辑与一键恢复模板；执行栏默认跟随当前阶段配置，也可随时点击手动改派给任意 CLI。
 - **双执行模式**：
-  - **内置直跑（实时流式输出）**：直接在右侧「CLI 终端输出」面板通过 SSE 实时查看输出，支持一键停止、历史多轮输出下拉对比，结束后自动刷新项目文档与任务进度。
+  - **内置直跑（实时流式输出）**：直接在右侧「CLI 终端输出」面板通过 SSE 实时查看输出，提示词通过标准输入传递，运行时可查看活动、计时和 PID。支持停止和切换历史输出，结束后自动刷新项目文档与任务进度。
   - **外部终端（交互会话）**：在 macOS 的「终端」或 Windows Terminal（可回退到 PowerShell）中，进入所选项目目录并带入口令启动交互会话。
 - **3 档权限策略**：按需切换 `默认` / `自动写文件` / `跳过确认`。
 
@@ -131,7 +131,7 @@ npm run build:mac -- arm64  # Apple 芯片
 npm run build:mac -- x64    # Intel
 ```
 
-构建生成 `dist/CollabStudio-v1.2.0-macos-<arch>.zip`，解压后获得 `CollabStudio.app`。桌面版从登录 shell、PATH 和常见安装目录探测 CLI。也可在「CLI 配置」里指定可执行文件完整路径。
+构建生成 `dist/CollabStudio-v1.2.1-macos-<arch>.zip`，解压后获得 `CollabStudio.app`。桌面版从登录 shell、PATH 和常见安装目录探测 CLI。也可在「CLI 配置」里指定可执行文件完整路径。
 
 ### 3. 打包 Windows 独立客户端（`CollabStudio.exe`）
 ```bash

@@ -60,6 +60,15 @@ export function populateEffortSelect(selectEl, efforts = [], currentValue = '') 
   }
 }
 
+export function fmtElapsed(startedAt, endedAt) {
+  if (!startedAt) return '';
+  const ms = Math.max(0, (endedAt ? Date.parse(endedAt) : Date.now()) - Date.parse(startedAt));
+  const sec = Math.floor(ms / 1000);
+  const m = String(Math.floor(sec / 60)).padStart(2, '0');
+  const s = String(sec % 60).padStart(2, '0');
+  return `${m}:${s}`;
+}
+
 export function createCliPanel({
   getActiveDir,
   getPromptText,
@@ -221,11 +230,15 @@ export function createCliPanel({
 
     const active = getActiveRun();
     const meta = STATUS_META[active.status] || { label: active.status, cls: '' };
+    const elapsed = fmtElapsed(active.startedAt, active.endedAt);
     const exitSuffix = active.status === 'done' || active.status === 'failed' ? ` (code ${active.exitCode})` : '';
-    $('cliRunStatus').textContent = `${meta.label}${exitSuffix}`;
+    const pidTag = active.status === 'running' && active.pid ? ` · PID ${active.pid}` : '';
+    const timeTag = elapsed ? ` · ${elapsed}` : '';
+    $('cliRunStatus').textContent = `${meta.label}${exitSuffix}${timeTag}${pidTag}`;
     $('cliRunStatus').className = `cli-status-pill ${meta.cls}`;
-    $('cliRunMeta').textContent = t("{0}   |   目录: {1}", active.commandDisplay, active.dir);
-    $('cliConsole').textContent = active.output || (active.status === 'running' ? t("正在启动 CLI，等待输出…") : t("(无文本输出)"));
+    const actText = active.activity ? t("状态：{0}   |   ", active.activity) : '';
+    $('cliRunMeta').textContent = actText + t("{0}   |   目录: {1}", active.commandDisplay, active.dir);
+    $('cliConsole').textContent = active.consoleLog || active.output || (active.status === 'running' ? t("正在启动 CLI，等待输出…") : t("(无文本输出)"));
     $('btnStopCli').classList.toggle('hidden', active.status !== 'running');
     scrollConsoleToBottom(false);
   }
@@ -349,14 +362,38 @@ export function createCliPanel({
       return;
     }
 
+    if (evt.type === 'cli:activity') {
+      const run = state.runs.find((r) => r.id === evt.runId);
+      if (!run) return;
+      run.activity = evt.activity || run.activity;
+      if (evt.pid) run.pid = evt.pid;
+      if (evt.usage) run.usage = evt.usage;
+      if (run.id === state.activeRunId) renderRunPanel();
+      return;
+    }
+
+    if (evt.type === 'cli:console') {
+      const run = state.runs.find((r) => r.id === evt.runId);
+      if (!run) return;
+      run.consoleLog = (run.consoleLog || '') + (evt.chunk || '');
+      if (run.id === state.activeRunId) {
+        const el = $('cliConsole');
+        const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 64;
+        el.textContent = run.consoleLog;
+        if (nearBottom) el.scrollTop = el.scrollHeight;
+      }
+      return;
+    }
+
     if (evt.type === 'cli:output') {
       const run = state.runs.find((r) => r.id === evt.runId);
       if (!run) return;
       run.output = (run.output || '') + (evt.chunk || '');
+      run.consoleLog = (run.consoleLog || '') + (evt.chunk || '');
       if (run.id === state.activeRunId) {
         const el = $('cliConsole');
         const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 64;
-        el.textContent = run.output;
+        el.textContent = run.consoleLog;
         if (nearBottom) el.scrollTop = el.scrollHeight;
       }
       return;
@@ -425,8 +462,9 @@ export function createCliPanel({
 
   $('btnCopyCliOutput').onclick = async () => {
     const active = getActiveRun();
-    if (!active?.output) return showToast(t("当前没有可复制的输出"));
-    await navigator.clipboard.writeText(active.output);
+    const output = active?.consoleLog || active?.output;
+    if (!output) return showToast(t("当前没有可复制的输出"));
+    await navigator.clipboard.writeText(output);
     showToast(t("CLI 输出已复制"));
   };
 
@@ -462,6 +500,15 @@ export function createCliPanel({
       showToast(e.message);
     }
   };
+
+  setInterval(() => {
+    const active = getActiveRun();
+    if (active && active.status === 'running') {
+      const elapsed = fmtElapsed(active.startedAt, null);
+      const pidTag = active.pid ? ` · PID ${active.pid}` : '';
+      $('cliRunStatus').textContent = `${STATUS_META.running.label} · ${elapsed}${pidTag}`;
+    }
+  }, 1000);
 
   refreshStatus(true);
 

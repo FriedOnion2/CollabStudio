@@ -11,7 +11,7 @@ import {
 } from './lib/store.mjs';
 import { STAGES, buildPrompts } from './lib/prompts.mjs';
 import {
-  detectAllClis, saveCliConfig, listRuns,
+  detectAllClis, saveCliConfig, listRuns, getRun,
   startInlineRun, launchExternalTerminal, stopRun, stopAllRuns, CLI_PROFILES
 } from './lib/cli.mjs';
 import {
@@ -184,7 +184,10 @@ async function handleRequest(req, res) {
     if (p === '/api/discussion' && req.method === 'GET') {
       const dir = url.searchParams.get('dir');
       if (!dir) return sendJson(res, 400, { error: t("缺少 dir 参数") });
-      return sendJson(res, 200, { discussion: readDiscussion(dir) });
+      const discussion = readDiscussion(dir);
+      const pending = discussion.messages.find((message) => message.pending && message.runId);
+      const activeRun = pending ? getRun(pending.runId) : null;
+      return sendJson(res, 200, { discussion, activeRun });
     }
 
     if (p === '/api/discussion/attachments' && req.method === 'POST') {

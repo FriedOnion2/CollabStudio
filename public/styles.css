@@ -213,7 +213,10 @@ code, .mono-path, .doc-editor, .prompt-box { font-family: "Cascadia Code", "JetB
 .disc-model-tag.tag-codex { background: #123127; color: #a7f3d0; }
 .disc-model-tag.tag-claude { background: #33230c; color: #fde68a; }
 .disc-model-tag.tag-antigravity { background: #162744; color: #bfdbfe; }
-.disc-thinking { font-size: 11px; color: var(--codex); font-weight: 600; }
+.disc-thinking { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--codex); font-weight: 600; }
+.disc-failed-tag { font-size: 11px; color: var(--danger); font-weight: 600; }
+.live-pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--codex); box-shadow: 0 0 8px var(--codex); animation: pulseDot 1.2s ease-in-out infinite; }
+@keyframes pulseDot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.75); } }
 .disc-msg-body { white-space: pre-wrap; word-break: break-word; font-size: 12.5px; line-height: 1.6; color: #e2ecf8; }
 .disc-msg-actions { display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid rgba(255,255,255,.06); padding-top: 5px; }
 .disc-msg-actions .act-prod { color: var(--codex); font-weight: 600; }

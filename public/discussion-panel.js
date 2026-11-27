@@ -1,6 +1,6 @@
 import { locale, t } from './locale.js';
 import { api, showToast } from './docs-panel.js';
-import { populateModelSelect, populateEffortSelect } from './cli-panel.js';
+import { fmtElapsed, populateModelSelect, populateEffortSelect } from './cli-panel.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -21,8 +21,24 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
     effort: 'high',
     discussion: { planLocked: false, attachments: [], messages: [] },
     activeRunId: null,
-    streamingMsgId: null
+    streamingMsgId: null,
+    liveActivity: '',
+    livePid: null,
+    liveStartedAt: null
   };
+
+  let discussionLoad = 0;
+
+  function liveLabel(startedAt) {
+    const status = state.liveActivity || t("正在等待模型响应…");
+    const elapsed = fmtElapsed(state.liveStartedAt || startedAt) || '00:00';
+    return `${status} · ${elapsed}${state.livePid ? ` · PID ${state.livePid}` : ''}`;
+  }
+
+  function updateLiveLabel() {
+    const label = $('discThread').querySelector('.disc-live-label');
+    if (label) label.textContent = liveLabel();
+  }
 
   function getCliInfo(id) {
     return state.clis.find((c) => c.id === id);
@@ -114,19 +130,26 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
           <div class="disc-msg-body">${esc(m.content)}</div>`;
       } else {
         const metaTags = [m.cliLabel || m.cli || t("模型"), m.model, m.effort ? t("思考:{0}", m.effort) : ''].filter(Boolean).join(' · ');
-        const pendingTag = m.pending ? `<span class="disc-thinking">${t("思考输出中…")}</span>` : '';
+        const isLive = Boolean(m.pending);
+        const pendingTag = isLive
+          ? `<span class="disc-thinking"><span class="live-pulse"></span><span class="disc-live-label">${esc(liveLabel(m.createdAt))}</span></span>`
+          : (m.status === 'failed' ? `<span class="disc-failed-tag">${t("执行失败")}</span>` : '');
         card.innerHTML = `
           <div class="disc-msg-head">
             <span class="disc-model-tag tag-${esc(m.cli || 'codex')}">${esc(metaTags)}</span>
             <div class="inline-actions">${pendingTag}<span class="muted">${timeStr}</span></div>
           </div>
-          <div class="disc-msg-body">${esc(m.content || (m.pending ? t("正在等待模型响应…") : ''))}</div>
-          ${m.pending ? '' : `<div class="disc-msg-actions">
+          <div class="disc-msg-body">${esc(m.content || (isLive ? t("正在等待模型响应…") : ''))}</div>
+          ${isLive
+            ? `<div class="disc-msg-actions"><button type="button" class="btn-link act-stop" style="color:var(--danger)">${t("■ 停止本轮")}</button></div>`
+            : `<div class="disc-msg-actions">
             <button type="button" class="btn-link act-copy">${t("复制")}</button>
             <button type="button" class="btn-link act-brief">${t("仅写入 01-brief")}</button>
             <button type="button" class="btn-link act-prod">${t("采纳并进入生产 →")}</button>
           </div>`}`;
-        if (!m.pending) {
+        if (isLive) {
+          card.querySelector('.act-stop').onclick = stopDiscussionRun;
+        } else {
           card.querySelector('.act-copy').onclick = async () => {
             await navigator.clipboard.writeText(m.content || '');
             showToast(t("已复制方案回复"));
@@ -144,10 +167,11 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
   }
 
   async function load(dir) {
+    const loadId = ++discussionLoad;
     state.dir = dir;
-    state.activeRunId = null;
-    state.streamingMsgId = null;
     if (!dir) {
+      state.activeRunId = null;
+      state.streamingMsgId = null;
       state.discussion = { planLocked: false, attachments: [], messages: [] };
       renderAttachments();
       renderMessages(true);
@@ -155,12 +179,16 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
     }
     try {
       const data = await api(`/api/discussion?dir=${encodeURIComponent(dir)}`);
+      if (loadId !== discussionLoad) return;
       state.discussion = data.discussion || { planLocked: false, attachments: [], messages: [] };
       const runningMsg = (state.discussion.messages || []).find((m) => m.pending && m.runId);
-      if (runningMsg) {
-        state.activeRunId = runningMsg.runId;
-        state.streamingMsgId = runningMsg.id;
-      }
+      const run = data.activeRun;
+      state.activeRunId = runningMsg?.runId || null;
+      state.streamingMsgId = runningMsg?.id || null;
+      state.liveActivity = run?.activity || '';
+      state.livePid = run?.pid || null;
+      state.liveStartedAt = run?.startedAt || runningMsg?.createdAt || null;
+      if (runningMsg && run?.output) runningMsg.content = run.output;
       renderAttachments();
       renderMessages(true);
     } catch (e) {
@@ -234,13 +262,14 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
   async function sendMessage() {
     const dir = getActiveDir();
     if (!dir) return showToast(t("请先选择或新建项目"));
-    if (state.activeRunId) return showToast(t("当前模型仍在回复中，请稍候或先点击停止"));
+    if (state.activeRunId || $('btnSendDisc').disabled) return showToast(t("当前模型仍在回复中，请稍候或先点击停止"));
     const input = $('discInput');
     const message = input.value.trim();
     if (!message) return showToast(t("请先输入你的需求或讨论问题"));
 
     try {
       input.value = '';
+      $('btnSendDisc').disabled = true;
       await api('/api/discussion/send', {
         method: 'POST',
         body: JSON.stringify({
@@ -255,6 +284,9 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
     } catch (e) {
       input.value = message;
       showToast(e.message);
+      if (state.dir) await load(state.dir);
+    } finally {
+      $('btnSendDisc').disabled = Boolean(state.activeRunId);
     }
   }
 
@@ -308,6 +340,12 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
 
   function handleSseEvent(evt) {
     if (!evt || !evt.type) return;
+    if (evt.type === 'cli:activity' && evt.runId && evt.runId === state.activeRunId) {
+      state.liveActivity = evt.activity || state.liveActivity;
+      if (evt.pid) state.livePid = evt.pid;
+      updateLiveLabel();
+      return;
+    }
     if (evt.type === 'cli:output' && evt.runId && evt.runId === state.activeRunId) {
       const msg = (state.discussion.messages || []).find((m) => m.id === state.streamingMsgId);
       if (msg) {
@@ -316,18 +354,15 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
       }
       return;
     }
-    if (evt.type === 'cli:exit' && evt.run && evt.run.id === state.activeRunId) {
-      state.activeRunId = null;
-      state.streamingMsgId = null;
-      if (state.dir) load(state.dir);
-      return;
-    }
+
     if (evt.type === 'discussion:updated' && state.dir && evt.dir?.toLowerCase() === state.dir.toLowerCase()) {
-      state.activeRunId = null;
-      state.streamingMsgId = null;
       load(state.dir);
     }
   }
+
+  setInterval(() => {
+    if (state.activeRunId) updateLiveLabel();
+  }, 1000);
 
   // Bind controls
   $('discModelSelect').onchange = (e) => {

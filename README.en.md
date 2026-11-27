@@ -18,7 +18,7 @@ CollabStudio is a desktop workbench for developing software with Antigravity (Ge
 
 - **Manage projects and subprojects.** Filter the workspace tree, compare progress and switch between siblings. Add a subproject manually or scan up to two directory levels and import selected folders. Subprojects keep their own state, docs, discussions and model routing, and inherit the main project’s agent rules by default.
 - **Discuss a plan before implementation.** Add requirements and drop reference files into the discussion or use the desktop file picker. Text attachments contribute their contents and binary attachments contribute a local path. Switch agents, models or reasoning effort while keeping the same thread. Finalizing a plan writes it to `docs/01-brief.md`, completes the first gate and can advance the project stage.
-- **Run local CLIs.** CollabStudio detects Codex, Claude and Antigravity (`agy`) and supports a custom executable path and extra arguments. Inline runs stream live output, keep run history for the current session and can be stopped. Interactive runs open Terminal on macOS or Windows Terminal with a PowerShell fallback on Windows. The CLI configuration is stored in CollabStudio’s own data directory.
+- **Run local CLIs.** CollabStudio detects Codex, Claude and Antigravity (`agy`) and supports a custom executable path and extra arguments. Inline runs pass prompts on standard input and show live output, activity, elapsed time and the PID. You can stop a run and revisit its output during the current session. Interactive runs open Terminal on macOS or Windows Terminal with a PowerShell fallback on Windows. The CLI configuration is stored in CollabStudio’s own data directory.
 - **Choose a model for each stage.** Set separate CLI, model and reasoning defaults for the five stages. Choose a model from the catalog or enter its name. Override the defaults for a single run, and choose default, auto-edit or skip-confirmation permissions.
 - **Hand off by file.** Draft major proposals independently, verify them before merging, and review the result against the frontend spec and API contract. Record release blockers and suggestions separately, with up to two review rounds. Turn recurring defects into type checks or regression tests.
 
@@ -79,7 +79,7 @@ npm run build:mac -- arm64  # Apple silicon
 npm run build:mac -- x64    # Intel
 ```
 
-The build writes `dist/CollabStudio-v1.2.0-macos-<arch>.zip`. Unzip it to get `CollabStudio.app`. The desktop app checks the macOS login shell’s PATH and common install directories. Enter an absolute executable path in CLI settings to override detection.
+The build writes `dist/CollabStudio-v1.2.1-macos-<arch>.zip`. Unzip it to get `CollabStudio.app`. The desktop app checks the macOS login shell’s PATH and common install directories. Enter an absolute executable path in CLI settings to override detection.
 
 For Windows x64:
 
