@@ -19,17 +19,22 @@
       </div>
 
       <div class="sidebar-actions">
-        <button id="btnNewProject" class="btn btn-primary full">+ 新建 / 导入主项目</button>
-        <input id="projectFilter" class="sidebar-search" type="search" placeholder="搜索主项目或子项目…" />
+        <button id="btnNewProject" class="btn btn-primary full" data-i18n>+ 新建 / 导入主项目</button>
+        <input id="projectFilter" class="sidebar-search" type="search" placeholder="搜索主项目或子项目…" data-i18n-attrs="placeholder" />
       </div>
 
-      <div class="section-label">工作区与子项目树</div>
+      <select id="languageSelect" class="select-sm language-select" aria-label="语言" data-i18n-attrs="aria-label">
+        <option value="zh" lang="zh-CN">简体中文</option>
+        <option value="en" lang="en">English</option>
+      </select>
+
+      <div class="section-label" data-i18n>工作区与子项目树</div>
       <div id="projectList" class="project-list"></div>
 
       <div class="sidebar-footer">
         <span class="conn-dot" id="connDot"></span>
-        <span id="connText">本地服务已连接</span>
-        <button id="btnQuit" class="btn-link" title="关闭后台服务">退出</button>
+        <span id="connText" data-i18n>本地服务已连接</span>
+        <button id="btnQuit" class="btn-link" title="关闭后台服务" data-i18n data-i18n-attrs="title">退出</button>
       </div>
     </aside>
 
@@ -37,9 +42,9 @@
       <div id="emptyState" class="empty-state">
         <div class="empty-card">
           <img src="/icon.png" alt="CollabStudio" class="empty-logo" />
-          <h2>三端 AI 协作控制台</h2>
-          <p><strong>Antigravity (Gemini)</strong> 军师规划与文案润色 · <strong>Claude</strong> 高审美视觉编排与复审 · <strong>Codex (GPT)</strong> 硬核后端与两级分级审查。所有交接通过三份规则文件与 <code>docs/</code> 闭环。</p>
-          <button id="btnEmptyNew" class="btn btn-primary">+ 初始化第一个项目</button>
+          <h2 data-i18n>三端 AI 协作控制台</h2>
+          <p data-i18n-rich><strong>Antigravity (Gemini)</strong> 军师规划与文案润色 · <strong>Claude</strong> 高审美视觉编排与复审 · <strong>Codex (GPT)</strong> 硬核后端与两级分级审查。所有交接通过三份规则文件与 <code>docs/</code> 闭环。</p>
+          <button id="btnEmptyNew" class="btn btn-primary" data-i18n>+ 初始化第一个项目</button>
         </div>
       </div>
 
@@ -50,30 +55,30 @@
               <button id="btnParentCrumb" class="crumb-parent hidden" type="button"></button>
               <span id="crumbSep" class="crumb-sep hidden">/</span>
               <h1 id="projName"></h1>
-              <span id="scopeBadge" class="scope-badge">主项目</span>
-              <select id="siblingSelect" class="select-sm sibling-select hidden" title="快速切换到同主项目下的其他子项目"></select>
-              <span id="freezeBadge" class="badge">契约草案</span>
+              <span id="scopeBadge" class="scope-badge" data-i18n>主项目</span>
+              <select id="siblingSelect" class="select-sm sibling-select hidden" title="快速切换到同主项目下的其他子项目" data-i18n-attrs="title"></select>
+              <span id="freezeBadge" class="badge" data-i18n>契约草案</span>
             </div>
             <div id="projPath" class="mono-path"></div>
           </div>
           <div class="topbar-actions">
-            <button id="btnAddSubproject" class="btn btn-sm">+ 子项目</button>
-            <button id="btnRefresh" class="btn btn-sm">刷新磁盘</button>
-            <button id="btnOpenFolder" class="btn btn-sm">打开目录</button>
-            <button id="btnToggleFreeze" class="btn btn-amber btn-sm">冻结接口契约</button>
-            <button id="btnRemoveProj" class="btn btn-danger-ghost btn-sm" title="仅从列表移除，不删文件">移除</button>
+            <button id="btnAddSubproject" class="btn btn-sm" data-i18n>+ 子项目</button>
+            <button id="btnRefresh" class="btn btn-sm" data-i18n>刷新磁盘</button>
+            <button id="btnOpenFolder" class="btn btn-sm" data-i18n>打开目录</button>
+            <button id="btnToggleFreeze" class="btn btn-amber btn-sm" data-i18n>冻结接口契约</button>
+            <button id="btnRemoveProj" class="btn btn-danger-ghost btn-sm" title="仅从列表移除，不删文件" data-i18n data-i18n-attrs="title">移除</button>
           </div>
         </header>
 
         <section id="subprojectsCard" class="subprojects-card hidden">
           <div class="card-head subprojects-head">
             <div class="inline-actions">
-              <span id="subprojectsTitle">子项目总览</span>
+              <span id="subprojectsTitle" data-i18n>子项目总览</span>
               <span id="subprojectsSummary" class="muted"></span>
             </div>
             <div class="inline-actions">
-              <button id="btnSubCardAdd" class="btn btn-sm" type="button">+ 添加 / 扫描子项目</button>
-              <button id="btnToggleSubCard" class="btn-link" type="button">收起</button>
+              <button id="btnSubCardAdd" class="btn btn-sm" type="button" data-i18n>+ 添加 / 扫描子项目</button>
+              <button id="btnToggleSubCard" class="btn-link" type="button" data-i18n>收起</button>
             </div>
           </div>
           <div id="subprojectGrid" class="subproject-grid"></div>
@@ -81,10 +86,10 @@
 
         <section class="pipeline-card">
           <div class="card-head">
-            <span>5 阶段协作管线（点击切换阶段，每阶段可独立指定模型与思考强度）</span>
+            <span data-i18n>5 阶段协作管线（点击切换阶段，每阶段可独立指定模型与思考强度）</span>
             <div class="inline-actions">
-              <button id="btnStageMatrix" class="btn btn-sm" type="button">⚙ 阶段模型矩阵</button>
-              <span id="taskProgressText" class="muted">任务进度 0/0</span>
+              <button id="btnStageMatrix" class="btn btn-sm" type="button" data-i18n>⚙ 阶段模型矩阵</button>
+              <span id="taskProgressText" class="muted" data-i18n>任务进度 0/0</span>
             </div>
           </div>
           <div id="stagePipeline" class="pipeline"></div>
@@ -93,53 +98,53 @@
         <div class="main-grid">
           <section class="panel">
             <div class="card-head">
-              <span>一键交接口令</span>
+              <span data-i18n>一键交接口令</span>
               <select id="milestoneSelect" class="select-sm"></select>
             </div>
             <div class="agent-switch">
-              <button class="agent-pill active" data-agent="codex">Codex 客户端</button>
-              <button class="agent-pill pill-claude" data-agent="claude">Claude 客户端</button>
+              <button class="agent-pill active" data-agent="codex" data-i18n>Codex 客户端</button>
+              <button class="agent-pill pill-claude" data-agent="claude" data-i18n>Claude 客户端</button>
               <button class="agent-pill pill-agy" data-agent="antigravity">Antigravity</button>
             </div>
             <div id="promptSubTabs" class="prompt-tabs"></div>
-            <textarea id="promptBox" class="prompt-box" placeholder="可直接使用模板口令，或直接在此编辑自定义指令后调用 CLI"></textarea>
+            <textarea id="promptBox" class="prompt-box" placeholder="可直接使用模板口令，或直接在此编辑自定义指令后调用 CLI" data-i18n-attrs="placeholder" ></textarea>
             <div class="panel-foot">
-              <span id="promptHint" class="muted">选择目标客户端与阶段后可直接运行或复制</span>
+              <span id="promptHint" class="muted" data-i18n>选择目标客户端与阶段后可直接运行或复制</span>
               <div class="inline-actions">
-                <button id="btnResetPrompt" class="btn btn-sm hidden" type="button">恢复模板</button>
-                <button id="btnCopyPrompt" class="btn btn-sm" type="button">复制口令</button>
+                <button id="btnResetPrompt" class="btn btn-sm hidden" type="button" data-i18n>恢复模板</button>
+                <button id="btnCopyPrompt" class="btn btn-sm" type="button" data-i18n>复制口令</button>
               </div>
             </div>
 
             <div class="cli-bar">
               <div class="cli-bar-top">
-                <span class="cli-bar-label">执行 CLI</span>
+                <span class="cli-bar-label" data-i18n>执行 CLI</span>
                 <div id="cliTargetSwitch" class="cli-target-switch"></div>
-                <button id="btnSaveStageRoute" class="btn btn-sm" type="button" title="将当前 CLI / 模型 / 思考强度保存为当前阶段的默认配置">存为阶段默认</button>
-                <button id="btnCliSettings" class="btn btn-sm" type="button" title="查看自动探测路径或自定义 CLI 命令">⚙</button>
+                <button id="btnSaveStageRoute" class="btn btn-sm" type="button" title="将当前 CLI / 模型 / 思考强度保存为当前阶段的默认配置" data-i18n data-i18n-attrs="title">存为阶段默认</button>
+                <button id="btnCliSettings" class="btn btn-sm" type="button" title="查看自动探测路径或自定义 CLI 命令" data-i18n-attrs="title">⚙</button>
               </div>
               <div class="cli-bar-controls">
-                <select id="cliModelSelect" class="select-sm" title="选择具体模型（支持手动输入）"></select>
-                <select id="cliEffortSelect" class="select-sm select-effort" title="选择思考/推理强度"></select>
+                <select id="cliModelSelect" class="select-sm" title="选择具体模型（支持手动输入）" data-i18n-attrs="title"></select>
+                <select id="cliEffortSelect" class="select-sm select-effort" title="选择思考/推理强度" data-i18n-attrs="title"></select>
               </div>
               <div class="cli-bar-controls">
-                <select id="cliModeSelect" class="select-sm" title="切换内置直跑或外部终端交互">
-                  <option value="inline">内置直跑（实时输出）</option>
-                  <option value="terminal">外部终端（交互会话）</option>
+                <select id="cliModeSelect" class="select-sm" title="切换内置直跑或外部终端交互" data-i18n-attrs="title">
+                  <option value="inline" data-i18n>内置直跑（实时输出）</option>
+                  <option value="terminal" data-i18n>外部终端（交互会话）</option>
                 </select>
-                <select id="cliPermSelect" class="select-sm" title="CLI 工具权限策略">
-                  <option value="default">权限：默认</option>
-                  <option value="auto">权限：自动写文件</option>
-                  <option value="bypass">权限：跳过确认</option>
+                <select id="cliPermSelect" class="select-sm" title="CLI 工具权限策略" data-i18n-attrs="title">
+                  <option value="default" data-i18n>权限：默认</option>
+                  <option value="auto" data-i18n>权限：自动写文件</option>
+                  <option value="bypass" data-i18n>权限：跳过确认</option>
                 </select>
-                <button id="btnRunCli" class="btn btn-primary btn-sm" type="button">▶ 运行</button>
+                <button id="btnRunCli" class="btn btn-primary btn-sm" type="button" data-i18n>▶ 运行</button>
               </div>
-              <div id="cliOverrideHint" class="cli-hint muted">点击上方按钮可随时手动切换执行 CLI</div>
+              <div id="cliOverrideHint" class="cli-hint muted" data-i18n>点击上方按钮可随时手动切换执行 CLI</div>
             </div>
 
             <div class="divider"></div>
             <div class="card-head">
-              <span>Milestone 切片进度（解析自 docs/04-tasks.md）</span>
+              <span data-i18n>Milestone 切片进度（解析自 docs/04-tasks.md）</span>
             </div>
             <div id="milestoneList" class="milestone-list"></div>
           </section>
@@ -148,49 +153,49 @@
             <div class="card-head">
               <div class="right-mode-tabs">
                 <button id="tabRightDiscuss" class="mode-tab active" type="button">
-                  需求与方案讨论
+                  <span data-i18n>需求与方案讨论</span>
                   <span id="discTabBadge" class="cli-tab-badge hidden"></span>
                 </button>
-                <button id="tabRightDocs" class="mode-tab" type="button">交接文档 SSOT</button>
+                <button id="tabRightDocs" class="mode-tab" type="button" data-i18n>交接文档 SSOT</button>
                 <button id="tabRightCli" class="mode-tab" type="button">
-                  CLI 终端输出
+                  <span data-i18n>CLI 终端输出</span>
                   <span id="cliTabBadge" class="cli-tab-badge hidden"></span>
                 </button>
               </div>
               <div id="discussHeaderActions" class="inline-actions">
-                <button id="btnImportFiles" class="btn btn-sm" type="button">+ 导入文件</button>
-                <button id="btnClearDisc" class="btn btn-sm" type="button">清空讨论</button>
+                <button id="btnImportFiles" class="btn btn-sm" type="button" data-i18n>+ 导入文件</button>
+                <button id="btnClearDisc" class="btn btn-sm" type="button" data-i18n>清空讨论</button>
               </div>
               <div id="docsHeaderActions" class="inline-actions hidden">
-                <span id="docStatus" class="muted">已同步</span>
-                <button id="btnSaveDoc" class="btn btn-primary btn-sm">保存文档</button>
+                <span id="docStatus" class="muted" data-i18n>已同步</span>
+                <button id="btnSaveDoc" class="btn btn-primary btn-sm" data-i18n>保存文档</button>
               </div>
               <div id="cliHeaderActions" class="inline-actions hidden">
-                <span id="cliRunStatus" class="cli-status-pill">空闲</span>
-                <button id="btnStopCli" class="btn btn-danger btn-sm hidden" type="button">■ 停止</button>
-                <button id="btnCopyCliOutput" class="btn btn-sm" type="button">复制输出</button>
+                <span id="cliRunStatus" class="cli-status-pill" data-i18n>空闲</span>
+                <button id="btnStopCli" class="btn btn-danger btn-sm hidden" type="button" data-i18n>■ 停止</button>
+                <button id="btnCopyCliOutput" class="btn btn-sm" type="button" data-i18n>复制输出</button>
               </div>
             </div>
 
             <div id="discussPane" class="right-pane">
               <div class="disc-config-bar">
-                <span class="cli-bar-label">讨论模型</span>
+                <span class="cli-bar-label" data-i18n>讨论模型</span>
                 <div id="discCliSwitch" class="cli-target-switch"></div>
-                <select id="discModelSelect" class="select-sm disc-model-sel" title="讨论使用的具体模型"></select>
-                <select id="discEffortSelect" class="select-sm select-effort" title="讨论思考强度"></select>
+                <select id="discModelSelect" class="select-sm disc-model-sel" title="讨论使用的具体模型" data-i18n-attrs="title"></select>
+                <select id="discEffortSelect" class="select-sm select-effort" title="讨论思考强度" data-i18n-attrs="title"></select>
               </div>
               <div id="discAttachList" class="disc-attach-bar"></div>
               <div id="discThread" class="disc-thread"></div>
               <div class="disc-composer">
-                <textarea id="discInput" class="disc-input" placeholder="输入你的需求想法、约束条件或继续追问（支持拖拽文件导入，Ctrl+Enter 发送）…"></textarea>
+                <textarea id="discInput" class="disc-input" ></textarea>
                 <div class="disc-composer-foot">
                   <div class="inline-actions">
-                    <button id="btnImportFiles2" class="btn btn-sm" type="button">+ 导入文件</button>
-                    <button id="btnFinalizePlan" class="btn btn-emerald btn-sm" type="button">✓ 确认方案并进入生产</button>
+                    <button id="btnImportFiles2" class="btn btn-sm" type="button" data-i18n>+ 导入文件</button>
+                    <button id="btnFinalizePlan" class="btn btn-emerald btn-sm" type="button" data-i18n>✓ 确认方案并进入生产</button>
                   </div>
                   <div class="inline-actions">
-                    <button id="btnStopDisc" class="btn btn-danger btn-sm hidden" type="button">■ 停止</button>
-                    <button id="btnSendDisc" class="btn btn-primary btn-sm" type="button">发送讨论</button>
+                    <button id="btnStopDisc" class="btn btn-danger btn-sm hidden" type="button" data-i18n>■ 停止</button>
+                    <button id="btnSendDisc" class="btn btn-primary btn-sm" type="button" data-i18n>发送讨论</button>
                   </div>
                 </div>
               </div>
@@ -216,27 +221,27 @@
   <div id="modalBackdrop" class="modal-backdrop hidden">
     <div class="modal">
       <div class="modal-head">
-        <h3>新建或导入协作项目</h3>
+        <h3 data-i18n>新建或导入协作项目</h3>
         <button id="btnCloseModal" class="btn-link">✕</button>
       </div>
       <label class="field">
-        <span>项目目录（本地路径）</span>
+        <span data-i18n>项目目录（本地路径）</span>
         <div class="input-row">
-          <input id="inputDir" type="text" placeholder="例如 /path/to/MyNextApp 或 ./MyNextApp" />
-          <button id="btnPickFolder" class="btn" type="button">浏览…</button>
+          <input id="inputDir" type="text" placeholder="例如 /path/to/MyNextApp 或 ./MyNextApp" data-i18n-attrs="placeholder" />
+          <button id="btnPickFolder" class="btn" type="button" data-i18n>浏览…</button>
         </div>
       </label>
       <label class="field">
-        <span>项目名称（留空默认取文件夹名）</span>
-        <input id="inputName" type="text" placeholder="例如 SnowNote" />
+        <span data-i18n>项目名称（留空默认取文件夹名）</span>
+        <input id="inputName" type="text" placeholder="例如 SnowNote" data-i18n-attrs="placeholder" />
       </label>
       <label class="checkbox-row">
         <input id="inputScaffold" type="checkbox" checked />
-        <span>自动初始化 <code>AGENTS.md</code> / <code>CLAUDE.md</code> / <code>GEMINI.md</code> 与 <code>docs/01~05</code> 骨架</span>
+        <span data-i18n-rich>自动初始化 <code>AGENTS.md</code> / <code>CLAUDE.md</code> / <code>GEMINI.md</code> 与 <code>docs/01~05</code> 骨架</span>
       </label>
       <div class="modal-actions">
-        <button id="btnCancelModal" class="btn">取消</button>
-        <button id="btnConfirmModal" class="btn btn-primary">确认添加</button>
+        <button id="btnCancelModal" class="btn" data-i18n>取消</button>
+        <button id="btnConfirmModal" class="btn btn-primary" data-i18n>确认添加</button>
       </div>
     </div>
   </div>
@@ -244,15 +249,15 @@
   <div id="cliModalBackdrop" class="modal-backdrop hidden">
     <div class="modal modal-wide">
       <div class="modal-head">
-        <h3>CLI 工具配置与本机探测</h3>
+        <h3 data-i18n>CLI 工具配置与本机探测</h3>
         <button id="btnCloseCliModal" class="btn-link">✕</button>
       </div>
-      <div class="muted">留空路径将自动从系统 PATH 及默认安装目录探测；修改后即时生效，与 CC Switch 配置完全隔离。</div>
+      <div class="muted" data-i18n>留空路径将自动从系统 PATH 及默认安装目录探测；修改后即时生效，与 CC Switch 配置完全隔离。</div>
       <div id="cliConfigList" class="cli-cfg-list"></div>
       <div class="modal-actions">
-        <button id="btnRedetectCli" class="btn" type="button">重新探测</button>
-        <button id="btnCancelCliModal" class="btn" type="button">取消</button>
-        <button id="btnSaveCliModal" class="btn btn-primary" type="button">保存配置</button>
+        <button id="btnRedetectCli" class="btn" type="button" data-i18n>重新探测</button>
+        <button id="btnCancelCliModal" class="btn" type="button" data-i18n>取消</button>
+        <button id="btnSaveCliModal" class="btn btn-primary" type="button" data-i18n>保存配置</button>
       </div>
     </div>
   </div>
@@ -260,14 +265,14 @@
   <div id="stageMatrixBackdrop" class="modal-backdrop hidden">
     <div class="modal modal-xl">
       <div class="modal-head">
-        <h3>分阶段模型与思考强度管理</h3>
+        <h3 data-i18n>分阶段模型与思考强度管理</h3>
         <button id="btnCloseStageMatrix" class="btn-link">✕</button>
       </div>
-      <div class="muted">为 1~5 每个阶段分别指定执行 CLI、具体模型和思考强度；切换阶段时左侧执行栏会自动套用对应配置，运行前仍可随时临时覆盖。</div>
+      <div class="muted" data-i18n>为 1~5 每个阶段分别指定执行 CLI、具体模型和思考强度；切换阶段时左侧执行栏会自动套用对应配置，运行前仍可随时临时覆盖。</div>
       <div id="stageMatrixList" class="stage-matrix-list"></div>
       <div class="modal-actions">
-        <button id="btnCancelStageMatrix" class="btn" type="button">取消</button>
-        <button id="btnSaveStageMatrix" class="btn btn-primary" type="button">保存阶段配置</button>
+        <button id="btnCancelStageMatrix" class="btn" type="button" data-i18n>取消</button>
+        <button id="btnSaveStageMatrix" class="btn btn-primary" type="button" data-i18n>保存阶段配置</button>
       </div>
     </div>
   </div>
@@ -275,32 +280,32 @@
   <div id="finalizeModalBackdrop" class="modal-backdrop hidden">
     <div class="modal modal-wide">
       <div class="modal-head">
-        <h3>确认方案并进入生产</h3>
+        <h3 data-i18n>确认方案并进入生产</h3>
         <button id="btnCloseFinalizeModal" class="btn-link">✕</button>
       </div>
-      <div class="muted">可将下方确认后的方案写入 <code>docs/01-brief.md</code>，同时自动勾选阶段 1 门禁并推进到生产阶段。</div>
+      <div class="muted" data-i18n-rich>可将下方确认后的方案写入 <code>docs/01-brief.md</code>，同时自动勾选阶段 1 门禁并推进到生产阶段。</div>
       <div class="finalize-opts">
         <label class="field">
-          <span>写入方式</span>
+          <span data-i18n>写入方式</span>
           <select id="finalizeModeSelect" class="select-sm">
-            <option value="replace">覆盖写入 docs/01-brief.md</option>
-            <option value="append">追加到 docs/01-brief.md 末尾</option>
+            <option value="replace" data-i18n>覆盖写入 docs/01-brief.md</option>
+            <option value="append" data-i18n>追加到 docs/01-brief.md 末尾</option>
           </select>
         </label>
         <label class="field">
-          <span>定稿后推进阶段</span>
+          <span data-i18n>定稿后推进阶段</span>
           <select id="finalizeStageSelect" class="select-sm">
-            <option value="2">推进到阶段 2（前端视觉与契约草案）</option>
-            <option value="3">推进到阶段 3（后端细化与契约冻结）</option>
-            <option value="4">直接进入阶段 4（切片编码生产）</option>
-            <option value="0">仅写入文档，保持当前阶段</option>
+            <option value="2" data-i18n>推进到阶段 2（前端视觉与契约草案）</option>
+            <option value="3" data-i18n>推进到阶段 3（后端细化与契约冻结）</option>
+            <option value="4" data-i18n>直接进入阶段 4（切片编码生产）</option>
+            <option value="0" data-i18n>仅写入文档，保持当前阶段</option>
           </select>
         </label>
       </div>
       <textarea id="finalizePlanText" class="finalize-editor" spellcheck="false"></textarea>
       <div class="modal-actions">
-        <button id="btnCancelFinalize" class="btn" type="button">继续讨论</button>
-        <button id="btnConfirmFinalize" class="btn btn-emerald" type="button">✓ 确认定稿并落盘</button>
+        <button id="btnCancelFinalize" class="btn" type="button" data-i18n>继续讨论</button>
+        <button id="btnConfirmFinalize" class="btn btn-emerald" type="button" data-i18n>✓ 确认定稿并落盘</button>
       </div>
     </div>
   </div>
@@ -308,57 +313,57 @@
   <div id="subModalBackdrop" class="modal-backdrop hidden">
     <div class="modal modal-wide">
       <div class="modal-head">
-        <h3 id="subModalTitle">管理子项目</h3>
+        <h3 id="subModalTitle" data-i18n>管理子项目</h3>
         <button id="btnCloseSubModal" class="btn-link">✕</button>
       </div>
       <div id="subModalRootPath" class="mono-path"></div>
       <div class="right-mode-tabs sub-modal-tabs">
-        <button id="tabSubManual" class="mode-tab active" type="button">新建 / 指定子项目</button>
-        <button id="tabSubScan" class="mode-tab" type="button">🔍 扫描主项目子目录</button>
+        <button id="tabSubManual" class="mode-tab active" type="button" data-i18n>新建 / 指定子项目</button>
+        <button id="tabSubScan" class="mode-tab" type="button" data-i18n>🔍 扫描主项目子目录</button>
       </div>
 
       <div id="subManualPane" class="sub-modal-pane">
         <label class="field">
-          <span>子项目路径（相对主项目路径，或点击浏览选择子文件夹）</span>
+          <span data-i18n>子项目路径（相对主项目路径，或点击浏览选择子文件夹）</span>
           <div class="input-row">
-            <input id="inputSubPath" type="text" placeholder="例如 apps/web 或 services/billing" />
-            <button id="btnPickSubFolder" class="btn" type="button">浏览…</button>
+            <input id="inputSubPath" type="text" placeholder="例如 apps/web 或 services/billing" data-i18n-attrs="placeholder" />
+            <button id="btnPickSubFolder" class="btn" type="button" data-i18n>浏览…</button>
           </div>
         </label>
         <label class="field">
-          <span>子项目显示名称（留空默认取末级目录名）</span>
-          <input id="inputSubName" type="text" placeholder="例如 Web 管理端" />
+          <span data-i18n>子项目显示名称（留空默认取末级目录名）</span>
+          <input id="inputSubName" type="text" placeholder="例如 Web 管理端" data-i18n-attrs="placeholder" />
         </label>
         <label class="checkbox-row">
           <input id="inputSubScaffold" type="checkbox" checked />
-          <span>自动初始化子项目 <code>docs/01~05</code>、<code>prototypes/</code> 与 <code>.collab-state.json</code></span>
+          <span data-i18n-rich>自动初始化子项目 <code>docs/01~05</code>、<code>prototypes/</code> 与 <code>.collab-state.json</code></span>
         </label>
         <label class="checkbox-row">
           <input id="inputSubRules" type="checkbox" />
-          <span>同时生成子项目独立的 <code>AGENTS.md</code> / <code>CLAUDE.md</code> / <code>GEMINI.md</code>（不勾选则继承主项目规则）</span>
+          <span data-i18n-rich>同时生成子项目独立的 <code>AGENTS.md</code> / <code>CLAUDE.md</code> / <code>GEMINI.md</code>（不勾选则继承主项目规则）</span>
         </label>
         <div class="modal-actions">
-          <button id="btnCancelSubModal" class="btn" type="button">取消</button>
-          <button id="btnConfirmSubManual" class="btn btn-primary" type="button">确认添加子项目</button>
+          <button id="btnCancelSubModal" class="btn" type="button" data-i18n>取消</button>
+          <button id="btnConfirmSubManual" class="btn btn-primary" type="button" data-i18n>确认添加子项目</button>
         </div>
       </div>
 
       <div id="subScanPane" class="sub-modal-pane hidden">
         <div class="sub-scan-bar">
-          <span id="subScanHint" class="muted">正在扫描主项目下的子目录…</span>
+          <span id="subScanHint" class="muted" data-i18n>正在扫描主项目下的子目录…</span>
           <div class="inline-actions">
-            <button id="btnSubSelectAll" class="btn btn-sm" type="button">全选未导入</button>
-            <button id="btnSubRescan" class="btn btn-sm" type="button">重新扫描</button>
+            <button id="btnSubSelectAll" class="btn btn-sm" type="button" data-i18n>全选未导入</button>
+            <button id="btnSubRescan" class="btn btn-sm" type="button" data-i18n>重新扫描</button>
           </div>
         </div>
         <div id="subScanList" class="sub-scan-list"></div>
         <label class="checkbox-row">
           <input id="inputScanScaffold" type="checkbox" checked />
-          <span>为未初始化的目录补齐 <code>docs/01~05</code> 与 <code>.collab-state.json</code>（不覆盖已有文件）</span>
+          <span data-i18n-rich>为未初始化的目录补齐 <code>docs/01~05</code> 与 <code>.collab-state.json</code>（不覆盖已有文件）</span>
         </label>
         <div class="modal-actions">
-          <button id="btnCancelSubModal2" class="btn" type="button">取消</button>
-          <button id="btnConfirmSubScan" class="btn btn-primary" type="button">批量导入选中子项目</button>
+          <button id="btnCancelSubModal2" class="btn" type="button" data-i18n>取消</button>
+          <button id="btnConfirmSubScan" class="btn btn-primary" type="button" data-i18n>批量导入选中子项目</button>
         </div>
       </div>
     </div>

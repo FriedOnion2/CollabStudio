@@ -1,19 +1,21 @@
+import { locale, t } from './locale.js';
 import { api, showToast } from './docs-panel.js';
 
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const $ = (id) => document.getElementById(id);
 
 const STATUS_META = {
-  running: { label: '运行中', cls: 'running' },
-  done: { label: '已完成', cls: 'done' },
-  failed: { label: '执行失败', cls: 'failed' },
-  stopped: { label: '已终止', cls: 'stopped' },
-  launched: { label: '外部终端', cls: 'launched' }
+  running: { label: t("运行中"), cls: 'running' },
+  done: { label: t("已完成"), cls: 'done' },
+  failed: { label: t("执行失败"), cls: 'failed' },
+  stopped: { label: t("已终止"), cls: 'stopped' },
+  launched: { label: t("外部终端"), cls: 'launched' }
 };
 
 export function populateModelSelect(selectEl, models = [], currentValue = '') {
   if (!selectEl) return;
   selectEl.innerHTML = '';
-  const list = models.length ? models : [{ id: '', label: '默认模型' }];
+  const list = models.length ? models : [{ id: '', label: t("默认模型") }];
   let matched = false;
   for (const m of list) {
     const opt = document.createElement('option');
@@ -28,13 +30,13 @@ export function populateModelSelect(selectEl, models = [], currentValue = '') {
   if (currentValue && !matched) {
     const custom = document.createElement('option');
     custom.value = currentValue;
-    custom.textContent = `自定义: ${currentValue}`;
+    custom.textContent = t("自定义: {0}", currentValue);
     custom.selected = true;
     selectEl.appendChild(custom);
   }
   const addOpt = document.createElement('option');
   addOpt.value = '__custom__';
-  addOpt.textContent = '+ 手动输入模型名…';
+  addOpt.textContent = t("+ 手动输入模型名…");
   selectEl.appendChild(addOpt);
 }
 
@@ -42,12 +44,12 @@ export function populateEffortSelect(selectEl, efforts = [], currentValue = '') 
   if (!selectEl) return;
   selectEl.innerHTML = '';
   const list = efforts.length ? efforts : [
-    { id: '', label: '默认强度' },
-    { id: 'low', label: '低 (low)' },
-    { id: 'medium', label: '中 (medium)' },
-    { id: 'high', label: '高 (high)' },
-    { id: 'xhigh', label: '极高 (xhigh)' },
-    { id: 'max', label: '最大 (max)' }
+    { id: '', label: t("默认强度") },
+    { id: 'low', label: t("低 (low)") },
+    { id: 'medium', label: t("中 (medium)") },
+    { id: 'high', label: t("高 (high)") },
+    { id: 'xhigh', label: t("极高 (xhigh)") },
+    { id: 'max', label: t("最大 (max)") }
   ];
   for (const e of list) {
     const opt = document.createElement('option');
@@ -111,7 +113,7 @@ export function createCliPanel({
     const runningCount = state.runs.filter((r) => r.status === 'running').length;
     const badge = $('cliTabBadge');
     if (runningCount > 0) {
-      badge.textContent = `${runningCount} 运行中`;
+      badge.textContent = t("{0} 运行中", runningCount);
       badge.className = 'cli-tab-badge running';
       badge.classList.remove('hidden');
     } else if (state.runs.length > 0) {
@@ -139,7 +141,7 @@ export function createCliPanel({
       btn.className = `cli-chip${cls}${state.selectedCli === id ? ' active' : ''}${info.available ? '' : ' unavailable'}`;
       btn.title = info.available
         ? `${info.label}: ${info.resolvedPath}${info.version ? ` (${info.version})` : ''}`
-        : `${info.label} 未检测到，点击右侧「配置」可手动指定路径`;
+        : t("{0} 未检测到，点击右侧「配置」可手动指定路径", info.label);
       btn.innerHTML = `<span class="cli-dot ${info.available ? 'ok' : 'miss'}"></span><span>${info.shortLabel}</span>`;
       btn.onclick = () => {
         if (state.selectedCli !== id) {
@@ -157,22 +159,22 @@ export function createCliPanel({
     const activeInfo = getCliInfo(state.selectedCli);
     const runBtn = $('btnRunCli');
     const isTerminal = state.mode === 'terminal';
-    runBtn.textContent = isTerminal ? `↗ 终端启动 ${activeInfo?.shortLabel || ''}` : `▶ 运行 ${activeInfo?.shortLabel || ''}`;
+    runBtn.textContent = isTerminal ? t("↗ 终端启动 {0}", activeInfo?.shortLabel || '') : t("▶ 运行 {0}", activeInfo?.shortLabel || '');
 
     const stageNum = getActiveStage ? getActiveStage() : 1;
-    $('btnSaveStageRoute').textContent = `存为阶段${stageNum}默认`;
+    $('btnSaveStageRoute').textContent = t("存为阶段{0}默认", stageNum);
 
     const note = $('cliOverrideHint');
-    const effTag = state.selectedEffort ? ` · 思考:${state.selectedEffort}` : '';
+    const effTag = state.selectedEffort ? t(" · 思考:{0}", state.selectedEffort) : '';
     const modTag = state.selectedModel ? ` · ${state.selectedModel}` : '';
     if (activeInfo && !activeInfo.available) {
-      note.textContent = `未检测到 ${activeInfo.label}，请点「配置」指定路径`;
+      note.textContent = t("未检测到 {0}，请点「配置」指定路径", activeInfo.label);
       note.classList.add('warn');
     } else if (state.manualOverride) {
-      note.textContent = `已手动切换：${activeInfo?.label || state.selectedCli}${modTag}${effTag}`;
+      note.textContent = t("已手动切换：{0}{1}{2}", activeInfo?.label || state.selectedCli, modTag, effTag);
       note.classList.remove('warn');
     } else {
-      note.textContent = `阶段 ${stageNum} 配置：${activeInfo?.label || state.selectedCli}${modTag}${effTag}`;
+      note.textContent = t("阶段 {0} 配置：{1}{2}{3}", stageNum, activeInfo?.label || state.selectedCli, modTag, effTag);
       note.classList.remove('warn');
     }
   }
@@ -192,11 +194,11 @@ export function createCliPanel({
     if (!state.runs.length) {
       const opt = document.createElement('option');
       opt.value = '';
-      opt.textContent = '暂无执行记录';
+      opt.textContent = t("暂无执行记录");
       sel.appendChild(opt);
-      $('cliRunStatus').textContent = '空闲';
+      $('cliRunStatus').textContent = t("空闲");
       $('cliRunStatus').className = 'cli-status-pill';
-      $('cliRunMeta').textContent = '选择左侧任意 CLI（Codex / Claude / AGY）与模型/思考强度后点击「运行」即可实时查看输出';
+      $('cliRunMeta').textContent = t("选择左侧任意 CLI（Codex / Claude / AGY）与模型/思考强度后点击「运行」即可实时查看输出");
       $('cliConsole').textContent = '';
       $('btnStopCli').classList.add('hidden');
       return;
@@ -210,9 +212,9 @@ export function createCliPanel({
       const opt = document.createElement('option');
       opt.value = r.id;
       const meta = STATUS_META[r.status] || { label: r.status };
-      const t = r.startedAt ? new Date(r.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+      const time = r.startedAt ? new Date(r.startedAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
       const spec = [r.model, r.effort].filter(Boolean).join('/');
-      opt.textContent = `[${meta.label}] ${r.cliLabel}${spec ? `(${spec})` : ''} · ${t} · ${r.promptPreview}`;
+      opt.textContent = `[${meta.label}] ${r.cliLabel}${spec ? `(${spec})` : ''} · ${time} · ${r.promptPreview}`;
       if (r.id === state.activeRunId) opt.selected = true;
       sel.appendChild(opt);
     }
@@ -222,8 +224,8 @@ export function createCliPanel({
     const exitSuffix = active.status === 'done' || active.status === 'failed' ? ` (code ${active.exitCode})` : '';
     $('cliRunStatus').textContent = `${meta.label}${exitSuffix}`;
     $('cliRunStatus').className = `cli-status-pill ${meta.cls}`;
-    $('cliRunMeta').textContent = `${active.commandDisplay}   |   目录: ${active.dir}`;
-    $('cliConsole').textContent = active.output || (active.status === 'running' ? '正在启动 CLI，等待输出…' : '(无文本输出)');
+    $('cliRunMeta').textContent = t("{0}   |   目录: {1}", active.commandDisplay, active.dir);
+    $('cliConsole').textContent = active.output || (active.status === 'running' ? t("正在启动 CLI，等待输出…") : t("(无文本输出)"));
     $('btnStopCli').classList.toggle('hidden', active.status !== 'running');
     scrollConsoleToBottom(false);
   }
@@ -238,16 +240,16 @@ export function createCliPanel({
       card.innerHTML = `
         <div class="cli-cfg-head">
           <span class="cli-cfg-title"><span class="cli-dot ${info.available ? 'ok' : 'miss'}"></span>${info.label}</span>
-          <span class="muted">${info.available ? (info.version || '已就绪') : '未检测到'}</span>
+          <span class="muted">${info.available ? (esc(info.version) || t("已就绪")) : t("未检测到")}</span>
         </div>
-        <div class="cli-cfg-detected mono-path">${info.resolvedPath ? `当前解析：${info.resolvedPath}` : '自动探测未找到，请在下方填写可执行文件完整路径'}</div>
+        <div class="cli-cfg-detected mono-path">${info.resolvedPath ? esc(t("当前解析：{0}", info.resolvedPath)) : t("自动探测未找到，请在下方填写可执行文件完整路径")}</div>
         <label class="field">
-          <span>自定义路径（留空自动探测）</span>
-          <input type="text" data-cli="${id}" data-field="path" value="${(info.configuredPath || '').replace(/"/g, '&quot;')}" placeholder="例如 C:\\Users\\...\\${id}.exe" />
+          <span>${t("自定义路径（留空自动探测）")}</span>
+          <input type="text" data-cli="${id}" data-field="path" value="${esc(info.configuredPath)}" placeholder="${t("可执行文件路径")}" />
         </label>
         <label class="field">
-          <span>默认附加参数（可选）</span>
-          <input type="text" data-cli="${id}" data-field="extraArgs" value="${(info.extraArgs || '').replace(/"/g, '&quot;')}" placeholder="例如 --verbose" />
+          <span>${t("默认附加参数（可选）")}</span>
+          <input type="text" data-cli="${id}" data-field="extraArgs" value="${esc(info.extraArgs)}" placeholder="${t("例如 --verbose")}" />
         </label>`;
       list.appendChild(card);
     }
@@ -264,7 +266,7 @@ export function createCliPanel({
         renderSettingsModal();
       }
     } catch (e) {
-      showToast(`检测 CLI 失败：${e.message}`);
+      showToast(t("检测 CLI 失败：{0}", e.message));
     }
   }
 
@@ -289,10 +291,10 @@ export function createCliPanel({
 
   async function runSelectedCli() {
     const dir = getActiveDir();
-    if (!dir) return showToast('请先选择或新建一个项目');
+    if (!dir) return showToast(t("请先选择或新建一个项目"));
     const prompt = getPromptText().trim();
     if (state.mode === 'inline' && !prompt) {
-      return showToast('内置直跑模式需要输入或选择执行口令');
+      return showToast(t("内置直跑模式需要输入或选择执行口令"));
     }
     try {
       const res = await api('/api/cli/run', {
@@ -308,13 +310,12 @@ export function createCliPanel({
         })
       });
       const run = res.run;
-      const idx = state.runs.findIndex((r) => r.id === run.id);
-      if (idx >= 0) state.runs[idx] = run;
-      else state.runs.unshift(run);
+      // Live events may arrive before the response and already hold newer output.
+      if (!state.runs.some((r) => r.id === run.id)) state.runs.unshift(run);
       state.activeRunId = run.id;
       setRightTab('cli');
       renderRunPanel();
-      showToast(state.mode === 'terminal' ? `已在外部终端启动 ${run.cliLabel}` : `已启动 ${run.cliLabel}`);
+      showToast(state.mode === 'terminal' ? t("已在外部终端启动 {0}", run.cliLabel) : t("已启动 {0}", run.cliLabel));
     } catch (e) {
       showToast(e.message);
     }
@@ -328,7 +329,7 @@ export function createCliPanel({
         method: 'POST',
         body: JSON.stringify({ runId: active.id })
       });
-      showToast('已发送终止信号');
+      showToast(t("已发送终止信号"));
     } catch (e) {
       showToast(e.message);
     }
@@ -386,7 +387,7 @@ export function createCliPanel({
 
   $('cliModelSelect').onchange = (e) => {
     if (e.target.value === '__custom__') {
-      const custom = prompt('请输入自定义模型名称（留空恢复默认）：', state.selectedModel || '');
+      const custom = prompt(t("请输入自定义模型名称（留空恢复默认）："), state.selectedModel || '');
       if (custom !== null) state.selectedModel = custom.trim();
     } else {
       state.selectedModel = e.target.value;
@@ -424,9 +425,9 @@ export function createCliPanel({
 
   $('btnCopyCliOutput').onclick = async () => {
     const active = getActiveRun();
-    if (!active?.output) return showToast('当前没有可复制的输出');
+    if (!active?.output) return showToast(t("当前没有可复制的输出"));
     await navigator.clipboard.writeText(active.output);
-    showToast('CLI 输出已复制');
+    showToast(t("CLI 输出已复制"));
   };
 
   $('btnCliSettings').onclick = async () => {
@@ -437,9 +438,9 @@ export function createCliPanel({
   $('btnCloseCliModal').onclick = () => $('cliModalBackdrop').classList.add('hidden');
   $('btnCancelCliModal').onclick = () => $('cliModalBackdrop').classList.add('hidden');
   $('btnRedetectCli').onclick = async () => {
-    showToast('正在重新探测本机 CLI 与模型…');
+    showToast(t("正在重新探测本机 CLI 与模型…"));
     await refreshStatus(true);
-    showToast('探测完成');
+    showToast(t("探测完成"));
   };
   $('btnSaveCliModal').onclick = async () => {
     const payload = { codex: {}, claude: {}, antigravity: {} };
@@ -456,7 +457,7 @@ export function createCliPanel({
       renderCliSwitcher();
       if (onCatalogUpdated) onCatalogUpdated({ clis: state.clis, catalog: state.catalog });
       $('cliModalBackdrop').classList.add('hidden');
-      showToast('CLI 配置已保存');
+      showToast(t("CLI 配置已保存"));
     } catch (e) {
       showToast(e.message);
     }

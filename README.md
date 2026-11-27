@@ -4,13 +4,15 @@
 
 <h1 align="center">CollabStudio</h1>
 
+<p align="center">简体中文 · <a href="README.en.md">English</a></p>
+
 <p align="center">
   <strong>Antigravity (Gemini) × Claude × Codex (GPT) 三端 AI 协同开发桌面控制台</strong><br/>
   主/子项目树形工作区 · 需求讨论与文件导入 · 内置三端 CLI 直跑 · 分阶段模型与思考强度路由 · SSOT 文件驱动交接
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.0-3b82f6?style=flat-square" alt="version" />
+  <img src="https://img.shields.io/badge/version-1.2.0-3b82f6?style=flat-square" alt="version" />
   <img src="https://img.shields.io/badge/runtime-Electron%20%7C%20Node.js%2018%2B-10b981?style=flat-square" alt="runtime" />
   <img src="https://img.shields.io/badge/dependencies-Zero%20Runtime%20Deps-f59e0b?style=flat-square" alt="zero-deps" />
   <img src="https://img.shields.io/badge/license-MIT-64748b?style=flat-square" alt="license" />
@@ -49,7 +51,7 @@
 - **随时手动切换执行端**：左侧口令框支持直接编辑与一键恢复模板；执行栏默认跟随当前阶段配置，也可随时点击手动改派给任意 CLI。
 - **双执行模式**：
   - **内置直跑（实时流式输出）**：直接在右侧「CLI 终端输出」面板通过 SSE 实时查看输出，支持一键停止、历史多轮输出下拉对比，结束后自动刷新项目文档与任务进度。
-  - **外部终端（交互会话）**：一键在 Windows Terminal（自动回退 PowerShell）中定位到目标项目/子项目目录并带入口令启动交互式 TUI 会话。
+  - **外部终端（交互会话）**：在 macOS 的「终端」或 Windows Terminal（可回退到 PowerShell）中，进入所选项目目录并带入口令启动交互会话。
 - **3 档权限策略**：按需切换 `默认` / `自动写文件` / `跳过确认`。
 
 ### 4. 分阶段模型与思考强度管理
@@ -105,27 +107,46 @@
 - **零运行时外部依赖**（服务端与核心逻辑基于纯 Node.js 标准库，需 Node.js >= 18）
 - 打包桌面端需安装 devDependencies（Electron）
 
+### macOS 桌面版
+
+从 [GitHub Releases](https://github.com/FriedOnion2/CollabStudio/releases) 选择对应的 ZIP。Apple 芯片选 `macos-arm64`，Intel 芯片选 `macos-x64`。解压后将 `CollabStudio.app` 移到「应用程序」并打开。桌面包自带 Electron，调用模型仍需安装并登录相应的 CLI。
+
+本地构建使用临时签名。macOS 如拦截下载的应用，可在核对 SHA-256 并确认来源后，前往「系统设置 → 隐私与安全性」查看「仍要打开」选项。Apple Developer ID 签名和公证需在发行时另外完成。
+
+桌面端和网页版都可以在左侧选择「简体中文」或「English」，默认简体中文。该设置会保留，并决定界面、内置口令和新建项目模板的语言。已有项目文件、讨论内容和 CLI 原始输出保留原语言。
+
 ### 1. 开发运行（Electron 独立桌面窗口）
 ```bash
 git clone https://github.com/FriedOnion2/CollabStudio.git
 cd CollabStudio
-npm install
+npm ci
 npm start
 ```
 
-### 2. 打包 Windows 独立客户端（`CollabStudio.exe`）
+### 2. 在 macOS 上打包
+
+```bash
+npm run build:mac           # 当前架构
+npm run build:mac -- arm64  # Apple 芯片
+npm run build:mac -- x64    # Intel
+```
+
+构建生成 `dist/CollabStudio-v1.2.0-macos-<arch>.zip`，解压后获得 `CollabStudio.app`。桌面版从登录 shell、PATH 和常见安装目录探测 CLI。也可在「CLI 配置」里指定可执行文件完整路径。
+
+### 3. 打包 Windows 独立客户端（`CollabStudio.exe`）
 ```bash
 npm run build:win
 # 产物位于 dist/CollabStudio-win32-x64/CollabStudio.exe
 ```
 > 若 Windows PowerShell 禁用了 `npm.ps1` 脚本执行策略，直接使用 `npm.cmd install` 与 `npm.cmd run build:win` 即可。
 
-### 3. 纯浏览器 / 服务器模式（不依赖 Electron）
+### 4. 纯浏览器 / 服务器模式（不依赖 Electron）
 ```bash
 npm run dev:web
-# 默认监听 http://127.0.0.1:43980，支持通过环境变量指定地址与端口：
-# HOST=0.0.0.0 PORT=43980 node server.mjs
+# 默认监听 http://127.0.0.1:43980，可用 PORT 修改端口
 ```
+
+网页版可手动填写项目路径，也可将参考文件拖入讨论区。macOS 原生选择器请使用桌面版。
 
 ---
 

@@ -1,3 +1,4 @@
+import { t, withLanguage } from './lib/locale.mjs';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -76,7 +77,7 @@ function pickFolderDialog() {
     const ps = [
       'Add-Type -AssemblyName System.Windows.Forms;',
       '$f = New-Object System.Windows.Forms.FolderBrowserDialog;',
-      '$f.Description = "选择或新建项目文件夹";',
+      `$f.Description = '${t('选择或新建项目文件夹')}';`,
       '$f.ShowNewFolderButton = $true;',
       'if ($f.ShowDialog() -eq "OK") { Write-Output $f.SelectedPath }'
     ].join(' ');
@@ -92,7 +93,7 @@ function pickFilesDialog() {
     const ps = [
       'Add-Type -AssemblyName System.Windows.Forms;',
       '$f = New-Object System.Windows.Forms.OpenFileDialog;',
-      '$f.Title = "选择要导入讨论的参考文件";',
+      `$f.Title = '${t('选择要导入讨论的参考文件')}';`,
       '$f.Multiselect = $true;',
       'if ($f.ShowDialog() -eq "OK") { $f.FileNames | ForEach-Object { Write-Output $_ } }'
     ].join(' ');
@@ -103,7 +104,21 @@ function pickFilesDialog() {
   });
 }
 
-const server = http.createServer(async (req, res) => {
+const server = http.createServer((req, res) => {
+  const language = req.headers['x-collab-language'];
+  withLanguage(language, () => handleRequest(req, res));
+});
+
+function localizeStages() {
+  return STAGES.map((stage) => ({
+    ...stage,
+    title: t(stage.title),
+    owner: t(stage.owner),
+    gateLabel: t(stage.gateLabel)
+  }));
+}
+
+async function handleRequest(req, res) {
   try {
     const url = new URL(req.url, `http://${req.headers.host || `${HOST}:${PORT}`}`);
     const p = url.pathname;
@@ -156,7 +171,7 @@ const server = http.createServer(async (req, res) => {
 
     if (p === '/api/cli/stop' && req.method === 'POST') {
       const { runId } = await readBody(req);
-      if (!runId) return sendJson(res, 400, { error: '缺少 runId 参数' });
+      if (!runId) return sendJson(res, 400, { error: t("缺少 runId 参数") });
       const run = stopRun(runId, broadcastEvent);
       return sendJson(res, 200, { run });
     }
@@ -168,13 +183,13 @@ const server = http.createServer(async (req, res) => {
 
     if (p === '/api/discussion' && req.method === 'GET') {
       const dir = url.searchParams.get('dir');
-      if (!dir) return sendJson(res, 400, { error: '缺少 dir 参数' });
+      if (!dir) return sendJson(res, 400, { error: t("缺少 dir 参数") });
       return sendJson(res, 200, { discussion: readDiscussion(dir) });
     }
 
     if (p === '/api/discussion/attachments' && req.method === 'POST') {
       const { dir, paths = [], uploads = [] } = await readBody(req);
-      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: '项目目录不存在' });
+      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: t("项目目录不存在") });
       let discussion = readDiscussion(dir);
       if (Array.isArray(paths) && paths.length) discussion = addAttachmentPaths(dir, paths);
       if (Array.isArray(uploads) && uploads.length) discussion = addUploadedAttachments(dir, uploads);
@@ -184,23 +199,23 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/discussion/attachments' && req.method === 'DELETE') {
       const dir = url.searchParams.get('dir');
       const id = url.searchParams.get('id');
-      if (!dir || !id) return sendJson(res, 400, { error: '缺少参数' });
+      if (!dir || !id) return sendJson(res, 400, { error: t("缺少参数") });
       const discussion = removeAttachment(dir, id);
       return sendJson(res, 200, { discussion });
     }
 
     if (p === '/api/discussion/clear' && req.method === 'POST') {
       const { dir, keepAttachments = true } = await readBody(req);
-      if (!dir) return sendJson(res, 400, { error: '缺少 dir 参数' });
+      if (!dir) return sendJson(res, 400, { error: t("缺少 dir 参数") });
       const discussion = clearDiscussion(dir, { keepAttachments });
       return sendJson(res, 200, { discussion });
     }
 
     if (p === '/api/discussion/send' && req.method === 'POST') {
       const { dir, message, cli = 'antigravity', model = '', effort = '', permissionMode = 'default' } = await readBody(req);
-      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: '项目目录不存在' });
+      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: t("项目目录不存在") });
       const text = String(message || '').trim();
-      if (!text) return sendJson(res, 400, { error: '请先输入需求或讨论内容' });
+      if (!text) return sendJson(res, 400, { error: t("请先输入需求或讨论内容") });
 
       const project = inspectScope(dir);
       const beforeDisc = readDiscussion(dir);
@@ -240,14 +255,14 @@ const server = http.createServer(async (req, res) => {
           model,
           effort,
           kind: 'discussion',
-          promptPreviewOverride: `[讨论] ${text}`,
+          promptPreviewOverride: t("[讨论] {0}", text),
           onComplete: (finishedRun) => {
             updateDiscussionMessage(dir, assistantMsg.id, {
               pending: false,
               status: finishedRun.status,
               exitCode: finishedRun.exitCode,
               runId: finishedRun.id,
-              content: finishedRun.output?.trim() || `(执行结束，无文本输出，exit=${finishedRun.exitCode})`
+              content: finishedRun.output?.trim() || t("(执行结束，无文本输出，exit={0})", finishedRun.exitCode)
             });
             broadcastEvent({ type: 'discussion:updated', dir: path.resolve(dir), msgId: assistantMsg.id, runId: finishedRun.id });
           }
@@ -259,7 +274,7 @@ const server = http.createServer(async (req, res) => {
         updateDiscussionMessage(dir, assistantMsg.id, {
           pending: false,
           status: 'failed',
-          content: `启动失败：${err.message}`
+          content: t("启动失败：{0}", err.message)
         });
         throw err;
       }
@@ -267,7 +282,7 @@ const server = http.createServer(async (req, res) => {
 
     if (p === '/api/discussion/finalize' && req.method === 'POST') {
       const { dir, planText, mode = 'replace', advanceToStage = 2 } = await readBody(req);
-      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: '项目目录不存在' });
+      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: t("项目目录不存在") });
       const result = finalizePlanToBrief({ dir, planText, mode, advanceToStage });
       return sendJson(res, 200, result);
     }
@@ -279,7 +294,7 @@ const server = http.createServer(async (req, res) => {
 
     if (p === '/api/open-folder' && req.method === 'POST') {
       const { target } = await readBody(req);
-      if (!target || !fs.existsSync(target)) return sendJson(res, 404, { error: '路径不存在' });
+      if (!target || !fs.existsSync(target)) return sendJson(res, 404, { error: t("路径不存在") });
       const cmd = process.platform === 'win32' ? 'explorer.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open';
       const child = spawn(cmd, [path.resolve(target)], { detached: true, stdio: 'ignore' });
       child.on('error', () => {});
@@ -289,12 +304,12 @@ const server = http.createServer(async (req, res) => {
 
     if (p === '/api/projects' && req.method === 'GET') {
       const list = loadRegistry().map((item) => inspectProject(item.dir, item.name));
-      return sendJson(res, 200, { stages: STAGES, projects: list });
+      return sendJson(res, 200, { stages: localizeStages(), projects: list });
     }
 
     if (p === '/api/projects/init' && req.method === 'POST') {
       const { dir, name, initScaffold = true } = await readBody(req);
-      if (!dir || !dir.trim()) return sendJson(res, 400, { error: '请填写项目目录' });
+      if (!dir || !dir.trim()) return sendJson(res, 400, { error: t("请填写项目目录") });
       const absDir = path.resolve(dir.trim());
       if (initScaffold) await scaffoldProject(absDir, name);
       const entry = registerProject(absDir, name);
@@ -304,22 +319,22 @@ const server = http.createServer(async (req, res) => {
 
     if (p === '/api/projects' && req.method === 'DELETE') {
       const dir = url.searchParams.get('dir');
-      if (!dir) return sendJson(res, 400, { error: '缺少 dir 参数' });
+      if (!dir) return sendJson(res, 400, { error: t("缺少 dir 参数") });
       unregisterProject(dir);
       return sendJson(res, 200, { ok: true });
     }
 
     if (p === '/api/subprojects/scan' && req.method === 'GET') {
       const dir = url.searchParams.get('dir');
-      if (!dir) return sendJson(res, 400, { error: '缺少 dir 参数' });
+      if (!dir) return sendJson(res, 400, { error: t("缺少 dir 参数") });
       const candidates = scanSubprojectCandidates(dir);
       return sendJson(res, 200, { candidates });
     }
 
     if (p === '/api/subprojects/add' && req.method === 'POST') {
       const { rootDir, items = [], initScaffold = true, includeRules = false } = await readBody(req);
-      if (!rootDir) return sendJson(res, 400, { error: '缺少 rootDir 参数' });
-      if (!Array.isArray(items) || !items.length) return sendJson(res, 400, { error: '请至少指定一个子项目' });
+      if (!rootDir) return sendJson(res, 400, { error: t("缺少 rootDir 参数") });
+      if (!Array.isArray(items) || !items.length) return sendJson(res, 400, { error: t("请至少指定一个子项目") });
       const added = [];
       for (const item of items) {
         added.push(registerSubproject(rootDir, {
@@ -336,7 +351,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/subprojects' && req.method === 'DELETE') {
       const rootDir = url.searchParams.get('rootDir');
       const relPath = url.searchParams.get('relPath');
-      if (!rootDir || !relPath) return sendJson(res, 400, { error: '缺少参数' });
+      if (!rootDir || !relPath) return sendJson(res, 400, { error: t("缺少参数") });
       unregisterSubproject(rootDir, relPath);
       return sendJson(res, 200, { project: inspectProject(rootDir) });
     }
@@ -344,15 +359,15 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/project' && req.method === 'GET') {
       const dir = url.searchParams.get('dir');
       const ms = url.searchParams.get('milestone') || '';
-      if (!dir) return sendJson(res, 400, { error: '缺少 dir 参数' });
+      if (!dir) return sendJson(res, 400, { error: t("缺少 dir 参数") });
       const project = inspectScope(dir);
       const activeMs = ms || project.milestones.find((m) => m.doneCount < m.totalCount)?.title || project.milestones[0]?.title || 'Milestone 1';
-      return sendJson(res, 200, { stages: STAGES, project, activeMilestone: activeMs, prompts: buildPrompts(project, activeMs) });
+      return sendJson(res, 200, { stages: localizeStages(), project, activeMilestone: activeMs, prompts: buildPrompts(project, activeMs) });
     }
 
     if (p === '/api/project/state' && req.method === 'PATCH') {
       const { dir, patch } = await readBody(req);
-      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: '项目目录不存在' });
+      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: t("项目目录不存在") });
       const state = writeProjectState(dir, patch || {});
       return sendJson(res, 200, { state });
     }
@@ -360,7 +375,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/doc' && req.method === 'GET') {
       const dir = url.searchParams.get('dir');
       const file = url.searchParams.get('file');
-      if (!dir || !isAllowedDoc(file)) return sendJson(res, 400, { error: '无效文档路径' });
+      if (!dir || !isAllowedDoc(file)) return sendJson(res, 400, { error: t("无效文档路径") });
       const absDir = path.resolve(dir);
       const full = path.join(absDir, file);
       if (fs.existsSync(full)) {
@@ -387,7 +402,7 @@ const server = http.createServer(async (req, res) => {
 
     if (p === '/api/doc' && req.method === 'PUT') {
       const { dir, file, content } = await readBody(req);
-      if (!dir || !isAllowedDoc(file)) return sendJson(res, 400, { error: '无效文档路径' });
+      if (!dir || !isAllowedDoc(file)) return sendJson(res, 400, { error: t("无效文档路径") });
       const full = path.join(path.resolve(dir), file);
       fs.mkdirSync(path.dirname(full), { recursive: true });
       fs.writeFileSync(full, String(content ?? ''), 'utf8');
@@ -404,9 +419,16 @@ const server = http.createServer(async (req, res) => {
   } catch (err) {
     sendJson(res, 500, { error: err.message || 'Internal Error' });
   }
-});
+}
 
 server.on('close', stopAllRuns);
+
+export function stopServer() {
+  stopAllRuns();
+  clearTimeout(shutdownTimer);
+  for (const client of sseClients) client.end();
+  server.close();
+}
 
 export function startServer(port = PORT, host = HOST) {
   return new Promise((resolve, reject) => {

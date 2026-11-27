@@ -293,3 +293,5 @@ code, .mono-path, .doc-editor, .prompt-box { font-family: "Cascadia Code", "JetB
   .sidebar { border-right: none; border-bottom: 1px solid var(--border); max-height: 240px; }
   .topbar-actions { flex-wrap: wrap; }
 }
+
+.language-select { align-self: flex-start; }

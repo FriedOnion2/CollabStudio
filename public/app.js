@@ -1,3 +1,4 @@
+import { language, localizePage, setLanguage, shortcutModifier, t } from './locale.js';
 import { api, showToast, createDocsPanel } from './docs-panel.js';
 import { createCliPanel, populateModelSelect, populateEffortSelect } from './cli-panel.js';
 import { createDiscussionPanel } from './discussion-panel.js';
@@ -5,10 +6,13 @@ import { createDiscussionPanel } from './discussion-panel.js';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+localizePage();
+$('discInput').placeholder = t("输入你的需求、约束条件或追问（支持拖拽附件，{0}+Enter 发送）…", shortcutModifier);
+
 const state = {
   stages: [],
   projects: [],
-  activeDir: null,
+  activeDir: sessionStorage.getItem('collabstudio.activeDir'),
   detail: null,
   expandedRoots: new Set(),
   filterText: '',
@@ -24,23 +28,23 @@ const state = {
 
 const PROMPT_MENUS = {
   codex: [
-    { key: 'stage3', label: '阶段3 · 后端细化' },
-    { key: 'stage4', label: '阶段4 · 硬核编码' },
-    { key: 'stage5Review', label: '阶段5 · 两级审查(≤2轮)' },
-    { key: 'guardrail', label: '错一次 → 硬检查' }
+    { key: 'stage3', label: t("阶段3 · 后端细化") },
+    { key: 'stage4', label: t("阶段4 · 硬核编码") },
+    { key: 'stage5Review', label: t("阶段5 · 两级审查(≤2轮)") },
+    { key: 'guardrail', label: t("错一次 → 硬检查") }
   ],
   claude: [
-    { key: 'merge', label: '阶段1 · 双方案合并' },
-    { key: 'stage2', label: '阶段2 · 视觉与动效' },
-    { key: 'stage4', label: '阶段4 · 改全与核实' },
-    { key: 'stage5Review', label: '阶段5 · 独立复审' }
+    { key: 'merge', label: t("阶段1 · 双方案合并") },
+    { key: 'stage2', label: t("阶段2 · 视觉与动效") },
+    { key: 'stage4', label: t("阶段4 · 改全与核实") },
+    { key: 'stage5Review', label: t("阶段5 · 独立复审") }
   ],
   antigravity: [
-    { key: 'blind', label: '独立盲写方案' },
-    { key: 'copy', label: '文案与交互润色' },
-    { key: 'current', label: '当前阶段指令' },
-    { key: '2', label: '阶段2 · 前端规范' },
-    { key: '5', label: '阶段5 · 设计验收' }
+    { key: 'blind', label: t("独立盲写方案") },
+    { key: 'copy', label: t("文案与交互润色") },
+    { key: 'current', label: t("当前阶段指令") },
+    { key: '2', label: t("阶段2 · 前端规范") },
+    { key: '5', label: t("阶段5 · 设计验收") }
   ]
 };
 
@@ -71,6 +75,28 @@ const docsPanel = createDocsPanel({
   }
 });
 
+const languageSelect = $('languageSelect');
+languageSelect.value = language;
+languageSelect.onchange = async () => {
+  const next = languageSelect.value;
+  const dirty = docsPanel.isDirty() || $('discInput').value.trim()
+    || ($('promptBox').value && $('promptBox').value !== state.lastTemplateText);
+  if (dirty && !confirm(t("切换语言并放弃未提交的更改？"))) {
+    languageSelect.value = language;
+    return;
+  }
+  languageSelect.disabled = true;
+  if (state.activeDir) sessionStorage.setItem('collabstudio.activeDir', state.activeDir);
+  else sessionStorage.removeItem('collabstudio.activeDir');
+  try {
+    await setLanguage(next);
+  } catch (error) {
+    languageSelect.value = language;
+    languageSelect.disabled = false;
+    showToast(t("无法保存语言设置：{0}", error.message));
+  }
+};
+
 const discussionPanel = createDiscussionPanel({
   getActiveDir: () => state.activeDir,
   onPlanFinalized: async ({ advanceToStage }) => {
@@ -96,7 +122,7 @@ const cliPanel = createCliPanel({
   onSaveStageRouting: async (route) => {
     const stageNum = String(state.detail?.project?.state?.stage || 1);
     await patchState({ stageRouting: { [stageNum]: route } });
-    showToast(`已保存为阶段 ${stageNum} 默认模型与思考强度`);
+    showToast(t("已保存为阶段 {0} 默认模型与思考强度", stageNum));
   }
 });
 
@@ -104,7 +130,7 @@ function connectEvents() {
   const es = new EventSource('/api/events');
   es.onopen = () => {
     $('connDot').classList.remove('off');
-    $('connText').textContent = '本地服务已连接';
+    $('connText').textContent = t("本地服务已连接");
   };
   es.onmessage = (e) => {
     try {
@@ -115,7 +141,7 @@ function connectEvents() {
   };
   es.onerror = () => {
     $('connDot').classList.add('off');
-    $('connText').textContent = '连接已断开';
+    $('connText').textContent = t("连接已断开");
   };
 }
 
@@ -169,7 +195,7 @@ function renderSidebar() {
     toggleBtn.type = 'button';
     toggleBtn.className = 'tree-toggle';
     toggleBtn.textContent = subs.length ? (isExpanded ? '▾' : '▸') : '•';
-    toggleBtn.title = subs.length ? (isExpanded ? '折叠子项目' : '展开子项目') : '暂无子项目';
+    toggleBtn.title = subs.length ? (isExpanded ? t("折叠子项目") : t("展开子项目")) : t("暂无子项目");
     toggleBtn.onclick = (e) => {
       e.stopPropagation();
       if (!subs.length) return;
@@ -184,11 +210,11 @@ function renderSidebar() {
     itemBtn.innerHTML = `
       <div class="proj-item-top">
         <span class="proj-item-name" title="${esc(p.dir)}">${esc(p.state.name)}</span>
-        <span class="stage-pill${subs.length ? ' sub-count' : ''}">${subs.length ? `${subs.length} 子项` : `阶段 ${p.state.stage}`}</span>
+        <span class="stage-pill${subs.length ? ' sub-count' : ''}">${subs.length ? t("{0} 子项", subs.length) : t("阶段 {0}", p.state.stage)}</span>
       </div>
       <div class="proj-item-sub">
-        <span>${p.exists ? `${prog.done}/${prog.total} 任务` : '目录不存在'}</span>
-        <span>${p.state.contractFrozen ? '已冻结' : `阶段 ${p.state.stage}`}</span>
+        <span>${p.exists ? t("{0}/{1} 任务", prog.done, prog.total) : t("目录不存在")}</span>
+        <span>${p.state.contractFrozen ? t("已冻结") : t("阶段 {0}", p.state.stage)}</span>
       </div>`;
     itemBtn.onclick = () => selectProject(p.dir);
 
@@ -196,7 +222,7 @@ function renderSidebar() {
     addBtn.type = 'button';
     addBtn.className = 'tree-add-btn';
     addBtn.textContent = '+';
-    addBtn.title = `为「${p.state.name}」添加或扫描子项目`;
+    addBtn.title = t("为「{0}」添加或扫描子项目", p.state.name);
     addBtn.onclick = (e) => {
       e.stopPropagation();
       openSubModal(p.dir, p.state.name);
@@ -215,12 +241,12 @@ function renderSidebar() {
         subBtn.title = s.dir;
         subBtn.innerHTML = `
           <div class="sub-node-top">
-            <span class="sub-node-name">${s.contractFrozen ? '<span class="frozen-dot" title="契约已冻结"></span>' : ''}${esc(s.name)}</span>
+            <span class="sub-node-name">${s.contractFrozen ? `<span class="frozen-dot" title="${t("契约已冻结")}"></span>` : ''}${esc(s.name)}</span>
             <span class="stage-pill">S${s.stage}</span>
           </div>
           <div class="sub-node-sub">
             <span class="sub-rel">${esc(s.relPath)}</span>
-            <span>${s.exists ? `${s.progress.done}/${s.progress.total}` : '缺失'}</span>
+            <span>${s.exists ? `${s.progress.done}/${s.progress.total}` : t("缺失")}</span>
           </div>`;
         subBtn.onclick = () => selectProject(s.dir);
         subTree.appendChild(subBtn);
@@ -241,12 +267,12 @@ function renderSubprojectsOverview(p) {
   }
   card.classList.remove('hidden');
   card.classList.toggle('collapsed', state.subCardCollapsed);
-  $('btnToggleSubCard').textContent = state.subCardCollapsed ? '展开' : '收起';
+  $('btnToggleSubCard').textContent = state.subCardCollapsed ? t("展开") : t("收起");
 
   const agg = p.aggregateProgress || p.progress;
   const frozenCount = subs.filter((s) => s.contractFrozen).length;
-  $('subprojectsTitle').textContent = `子项目总览 (${subs.length})`;
-  $('subprojectsSummary').textContent = `汇总任务 ${agg.done}/${agg.total} · 已冻结契约 ${frozenCount}/${subs.length}`;
+  $('subprojectsTitle').textContent = t("子项目总览 ({0})", subs.length);
+  $('subprojectsSummary').textContent = t("汇总任务 {0}/{1} · 已冻结契约 {2}/{3}", agg.done, agg.total, frozenCount, subs.length);
 
   const grid = $('subprojectGrid');
   grid.innerHTML = '';
@@ -261,13 +287,13 @@ function renderSubprojectsOverview(p) {
     el.innerHTML = `
       <div class="sub-card-top">
         <span class="proj-item-name">${esc(s.name)}</span>
-        <span class="stage-pill">阶段 ${s.stage}</span>
+        <span class="stage-pill">${t("阶段 {0}", s.stage)}</span>
       </div>
       <div class="sub-card-path">${esc(s.relPath)}</div>
       <div class="sub-card-bar"><div style="width:${pct}%"></div></div>
       <div class="sub-card-meta">
         <span>${s.progress.done}/${s.progress.total} (${pct}%)</span>
-        <span>${s.contractFrozen ? '已冻结 · ' : ''}${esc(routeTag)}</span>
+        <span>${s.contractFrozen ? t("已冻结 · ") : ''}${esc(routeTag)}</span>
       </div>`;
     el.onclick = () => selectProject(s.dir);
     grid.appendChild(el);
@@ -309,9 +335,9 @@ function updatePromptBox(preserveEdited = false) {
     $('btnResetPrompt').classList.add('hidden');
   }
   const hints = {
-    codex: '可直接下方调用 CLI 执行，或复制粘贴到 Codex 客户端',
-    claude: '可直接下方调用 CLI 执行，或复制粘贴到 Claude 客户端',
-    antigravity: '可直接下方调用 Antigravity CLI，或复制到对话框'
+    codex: t("可直接下方调用 CLI 执行，或复制粘贴到 Codex 客户端"),
+    claude: t("可直接下方调用 CLI 执行，或复制粘贴到 Claude 客户端"),
+    antigravity: t("可直接下方调用 Antigravity CLI，或复制到对话框")
   };
   $('promptHint').textContent = hints[state.activeAgent] || '';
 }
@@ -329,7 +355,7 @@ function renderProjectDetail(preserveDoc = true) {
   const p = d.project;
   $('projName').textContent = p.state.name;
   $('projPath').textContent = p.dir;
-  $('taskProgressText').textContent = `任务进度 ${p.progress.done}/${p.progress.total}`;
+  $('taskProgressText').textContent = t("任务进度 {0}/{1}", p.progress.done, p.progress.total);
 
   // Breadcrumb & sibling switcher
   const parentBtn = $('btnParentCrumb');
@@ -337,13 +363,13 @@ function renderProjectDetail(preserveDoc = true) {
   const scopeBadge = $('scopeBadge');
   const sibSel = $('siblingSelect');
   if (p.isSubproject && p.parentDir) {
-    parentBtn.textContent = p.parentName || '主项目';
+    parentBtn.textContent = p.parentName || t("主项目");
     parentBtn.classList.remove('hidden');
     parentBtn.onclick = () => selectProject(p.parentDir);
     crumbSep.classList.remove('hidden');
-    scopeBadge.textContent = `子项目 · ${p.relPath}`;
+    scopeBadge.textContent = t("子项目 · {0}", p.relPath);
     scopeBadge.className = 'scope-badge sub';
-    $('btnRemoveProj').textContent = '移除子项目';
+    $('btnRemoveProj').textContent = t("移除子项目");
     const siblings = p.siblings || [];
     if (siblings.length > 1) {
       sibSel.innerHTML = '';
@@ -363,15 +389,15 @@ function renderProjectDetail(preserveDoc = true) {
     crumbSep.classList.add('hidden');
     sibSel.classList.add('hidden');
     const subCount = (p.subprojects || []).length;
-    scopeBadge.textContent = subCount ? `主项目 · ${subCount} 子项` : '主项目';
+    scopeBadge.textContent = subCount ? t("主项目 · {0} 子项", subCount) : t("主项目");
     scopeBadge.className = 'scope-badge';
-    $('btnRemoveProj').textContent = '移除';
+    $('btnRemoveProj').textContent = t("移除");
   }
 
   const frozen = Boolean(p.state.contractFrozen);
-  $('freezeBadge').textContent = frozen ? '契约已冻结 (FROZEN)' : '契约草案 (DRAFT)';
+  $('freezeBadge').textContent = frozen ? t("契约已冻结 (FROZEN)") : t("契约草案 (DRAFT)");
   $('freezeBadge').className = `badge${frozen ? ' frozen' : ''}`;
-  $('btnToggleFreeze').textContent = frozen ? '解除契约冻结' : '冻结接口契约';
+  $('btnToggleFreeze').textContent = frozen ? t("解除契约冻结") : t("冻结接口契约");
 
   renderSubprojectsOverview(p);
 
@@ -386,21 +412,21 @@ function renderProjectDetail(preserveDoc = true) {
     const card = document.createElement('div');
     card.className = `stage-card${active ? ' active' : ''}${done ? ' done' : ''}`;
     card.innerHTML = `
-      <div class="stage-top"><span>阶段 ${s.id}</span><span class="stage-owner ${ownerCls}">${s.owner}</span></div>
+      <div class="stage-top"><span>${t("阶段 {0}", s.id)}</span><span class="stage-owner ${ownerCls}">${s.owner}</span></div>
       <div class="stage-name">${s.title}</div>
       <div class="stage-route-row">
-        <select class="stage-mini-sel sel-stage-cli" title="切换阶段 ${s.id} 使用的 CLI">
+        <select class="stage-mini-sel sel-stage-cli" title="${t("切换阶段 {0} 使用的 CLI", s.id)}">
           <option value="antigravity"${r.cli === 'antigravity' ? ' selected' : ''}>AGY</option>
           <option value="claude"${r.cli === 'claude' ? ' selected' : ''}>Claude</option>
           <option value="codex"${r.cli === 'codex' ? ' selected' : ''}>Codex</option>
         </select>
-        <select class="stage-mini-sel sel-stage-effort" title="切换阶段 ${s.id} 思考强度">
-          <option value=""${!r.effort ? ' selected' : ''}>默认</option>
-          <option value="low"${r.effort === 'low' ? ' selected' : ''}>低</option>
-          <option value="medium"${r.effort === 'medium' ? ' selected' : ''}>中</option>
-          <option value="high"${r.effort === 'high' ? ' selected' : ''}>高</option>
-          <option value="xhigh"${r.effort === 'xhigh' ? ' selected' : ''}>极高</option>
-          <option value="max"${r.effort === 'max' ? ' selected' : ''}>最大</option>
+        <select class="stage-mini-sel sel-stage-effort" title="${t("切换阶段 {0} 思考强度", s.id)}">
+          <option value=""${!r.effort ? ' selected' : ''}>${t("默认")}</option>
+          <option value="low"${r.effort === 'low' ? ' selected' : ''}>${t("低")}</option>
+          <option value="medium"${r.effort === 'medium' ? ' selected' : ''}>${t("中")}</option>
+          <option value="high"${r.effort === 'high' ? ' selected' : ''}>${t("高")}</option>
+          <option value="xhigh"${r.effort === 'xhigh' ? ' selected' : ''}>${t("极高")}</option>
+          <option value="max"${r.effort === 'max' ? ' selected' : ''}>${t("最大")}</option>
         </select>
       </div>
       ${r.model ? `<div class="stage-model-tag" title="${esc(r.model)}">${esc(r.model)}</div>` : ''}
@@ -418,13 +444,13 @@ function renderProjectDetail(preserveDoc = true) {
       const nextRoute = { ...r, cli: e.target.value, model: '' };
       if (active) state.lastSyncedStage = null;
       await patchState({ stageRouting: { [String(s.id)]: nextRoute } });
-      showToast(`阶段 ${s.id} 已切换为 ${e.target.selectedOptions[0].textContent}`);
+      showToast(t("阶段 {0} 已切换为 {1}", s.id, e.target.selectedOptions[0].textContent));
     };
     card.querySelector('.sel-stage-effort').onchange = async (e) => {
       const nextRoute = { ...r, effort: e.target.value };
       if (active) state.lastSyncedStage = null;
       await patchState({ stageRouting: { [String(s.id)]: nextRoute } });
-      showToast(`阶段 ${s.id} 思考强度已设为「${e.target.selectedOptions[0].textContent}」`);
+      showToast(t("阶段 {0} 思考强度已设为「{1}」", s.id, e.target.selectedOptions[0].textContent));
     };
     pipe.appendChild(card);
   }
@@ -475,8 +501,8 @@ function renderStageMatrixModal() {
     row.dataset.stage = String(s.id);
     row.innerHTML = `
       <div>
-        <div class="stage-matrix-label">阶段 ${s.id} · ${s.title}</div>
-        <div class="stage-matrix-sub">推荐：${s.owner}</div>
+        <div class="stage-matrix-label">${t("阶段 {0}", s.id)} · ${s.title}</div>
+        <div class="stage-matrix-sub">${t("推荐：{0}", s.owner)}</div>
       </div>
       <select class="select-sm m-cli">
         <option value="antigravity"${r.cli === 'antigravity' ? ' selected' : ''}>Antigravity CLI</option>
@@ -495,7 +521,7 @@ function renderStageMatrixModal() {
     cliSel.onchange = () => populateModelSelect(modSel, catalog[cliSel.value] || [], '');
     modSel.onchange = () => {
       if (modSel.value === '__custom__') {
-        const custom = prompt(`为阶段 ${s.id} 输入自定义模型名称：`, '');
+        const custom = prompt(t("为阶段 {0} 输入自定义模型名称：", s.id), '');
         populateModelSelect(modSel, catalog[cliSel.value] || [], (custom || '').trim());
       }
     };
@@ -516,8 +542,8 @@ function setSubModalTab(tab) {
 function openSubModal(rootDir, rootName, defaultTab = 'manual') {
   state.subModalRootDir = rootDir;
   state.subModalRootName = rootName;
-  $('subModalTitle').textContent = `管理子项目 · ${rootName}`;
-  $('subModalRootPath').textContent = `主项目根目录：${rootDir}`;
+  $('subModalTitle').textContent = t("管理子项目 · {0}", rootName);
+  $('subModalRootPath').textContent = t("主项目根目录：{0}", rootDir);
   $('inputSubPath').value = '';
   $('inputSubName').value = '';
   $('inputSubScaffold').checked = true;
@@ -535,17 +561,17 @@ function closeSubModal() {
 async function runSubprojectScan() {
   const rootDir = state.subModalRootDir;
   if (!rootDir) return;
-  $('subScanHint').textContent = '正在扫描主项目下的子目录…';
+  $('subScanHint').textContent = t("正在扫描主项目下的子目录…");
   const list = $('subScanList');
   list.innerHTML = '';
   try {
     const { candidates } = await api(`/api/subprojects/scan?dir=${encodeURIComponent(rootDir)}`);
     if (!candidates.length) {
-      $('subScanHint').textContent = '未发现可导入的子目录，可切回「新建 / 指定子项目」手动创建';
+      $('subScanHint').textContent = t("未发现可导入的子目录，可切回「新建 / 指定子项目」手动创建");
       return;
     }
     const pendingCount = candidates.filter((c) => !c.alreadyAdded).length;
-    $('subScanHint').textContent = `发现 ${candidates.length} 个子目录（${pendingCount} 个未导入）`;
+    $('subScanHint').textContent = t("发现 {0} 个子目录（{1} 个未导入）", candidates.length, pendingCount);
     for (const c of candidates) {
       const row = document.createElement('label');
       row.className = `sub-scan-item${c.alreadyAdded ? ' added' : ''}`;
@@ -555,11 +581,11 @@ async function runSubprojectScan() {
           <input type="checkbox" class="scan-chk" data-rel="${esc(c.relPath)}" data-name="${esc(c.name)}" ${c.alreadyAdded ? 'disabled' : (c.tags?.length ? 'checked' : '')} />
           <span class="sub-scan-path" title="${esc(c.absDir)}">${esc(c.relPath)}</span>
         </div>
-        <div class="sub-scan-tags">${c.alreadyAdded ? '<span class="muted">已导入</span>' : tagsHtml}</div>`;
+        <div class="sub-scan-tags">${c.alreadyAdded ? `<span class="muted">${t("已导入")}</span>` : tagsHtml}</div>`;
       list.appendChild(row);
     }
   } catch (e) {
-    $('subScanHint').textContent = `扫描失败：${e.message}`;
+    $('subScanHint').textContent = t("扫描失败：{0}", e.message);
   }
 }
 
@@ -647,7 +673,7 @@ $('btnPickFolder').onclick = async () => {
 
 $('btnConfirmModal').onclick = async () => {
   const dir = $('inputDir').value.trim();
-  if (!dir) return showToast('请先填写或选择项目目录');
+  if (!dir) return showToast(t("请先填写或选择项目目录"));
   try {
     const res = await api('/api/projects/init', {
       method: 'POST',
@@ -658,7 +684,7 @@ $('btnConfirmModal').onclick = async () => {
     state.expandedRoots.add(res.project.dir);
     await loadProjects(true);
     cliPanel.setRightTab('discuss');
-    showToast(`已就绪：${res.project.state.name}`);
+    showToast(t("已就绪：{0}", res.project.state.name));
   } catch (e) { showToast(e.message); }
 };
 
@@ -704,7 +730,7 @@ $('btnPickSubFolder').onclick = async () => {
 
 $('btnConfirmSubManual').onclick = async () => {
   const relPath = $('inputSubPath').value.trim();
-  if (!relPath) return showToast('请填写或选择子项目路径');
+  if (!relPath) return showToast(t("请填写或选择子项目路径"));
   try {
     const res = await api('/api/subprojects/add', {
       method: 'POST',
@@ -721,7 +747,7 @@ $('btnConfirmSubManual').onclick = async () => {
     state.activeDir = addedDir;
     await loadProjects(true);
     cliPanel.setRightTab('discuss');
-    showToast(`已添加子项目：${res.added?.[0]?.entry?.name || relPath}`);
+    showToast(t("已添加子项目：{0}", res.added?.[0]?.entry?.name || relPath));
   } catch (e) { showToast(e.message); }
 };
 
@@ -730,7 +756,7 @@ $('btnConfirmSubScan').onclick = async () => {
   document.querySelectorAll('#subScanList .scan-chk:checked').forEach((chk) => {
     selected.push({ relPath: chk.dataset.rel, name: chk.dataset.name });
   });
-  if (!selected.length) return showToast('请先勾选至少一个要导入的子目录');
+  if (!selected.length) return showToast(t("请先勾选至少一个要导入的子目录"));
   try {
     await api('/api/subprojects/add', {
       method: 'POST',
@@ -744,33 +770,34 @@ $('btnConfirmSubScan').onclick = async () => {
     closeSubModal();
     state.expandedRoots.add(state.subModalRootDir);
     await loadProjects(true);
-    showToast(`已批量导入 ${selected.length} 个子项目`);
+    showToast(t("已批量导入 {0} 个子项目", selected.length));
   } catch (e) { showToast(e.message); }
 };
 
-$('btnRefresh').onclick = () => refreshActive(true).then(() => showToast('已从磁盘刷新'));
+$('btnRefresh').onclick = () => refreshActive(true).then(() => showToast(t("已从磁盘刷新")));
 $('btnOpenFolder').onclick = () => api('/api/open-folder', { method: 'POST', body: JSON.stringify({ target: state.activeDir }) });
 $('btnToggleFreeze').onclick = () => {
   const frozen = !state.detail?.project?.state?.contractFrozen;
-  patchState({ contractFrozen: frozen, gates: { g3: frozen } }).then(() => showToast(frozen ? '接口契约已冻结' : '已切换回草案'));
+  patchState({ contractFrozen: frozen, gates: { g3: frozen } }).then(() => showToast(frozen ? t("接口契约已冻结") : t("已切换回草案")));
 };
 $('btnRemoveProj').onclick = async () => {
   const p = state.detail?.project;
   if (!p) return;
   if (p.isSubproject && p.parentDir) {
-    if (!confirm(`仅从主项目「${p.parentName}」的子项目列表移除「${p.state.name}」，不会删除磁盘文件，确定吗？`)) return;
+    if (!confirm(t("仅从主项目「{0}」的子项目列表移除「{1}」，不会删除磁盘文件，确定吗？", p.parentName, p.state.name))) return;
     await api(`/api/subprojects?rootDir=${encodeURIComponent(p.parentDir)}&relPath=${encodeURIComponent(p.relPath)}`, { method: 'DELETE' });
     state.activeDir = p.parentDir;
     await loadProjects(true);
-    showToast(`已移除子项目：${p.state.name}`);
+    showToast(t("已移除子项目：{0}", p.state.name));
     return;
   }
-  if (!confirm('仅从 CollabStudio 列表移除该主项目，不会删除磁盘文件，确定吗？')) return;
+  if (!confirm(t("仅从 CollabStudio 列表移除该主项目，不会删除磁盘文件，确定吗？"))) return;
   await api(`/api/projects?dir=${encodeURIComponent(state.activeDir)}`, { method: 'DELETE' });
   state.activeDir = null;
   await loadProjects(false);
 };
 $('btnQuit').onclick = async () => {
+  if (window.electronAPI) return window.electronAPI.quit();
   await api('/api/shutdown', { method: 'POST' }).catch(() => {});
   window.close();
 };
@@ -795,7 +822,7 @@ $('btnSaveStageMatrix').onclick = async () => {
   state.lastSyncedStage = null;
   await patchState({ stageRouting });
   $('stageMatrixBackdrop').classList.add('hidden');
-  showToast('已更新 5 阶段模型与思考强度配置');
+  showToast(t("已更新 5 阶段模型与思考强度配置"));
 };
 
 document.querySelectorAll('.agent-switch .agent-pill').forEach((btn) => {
@@ -815,7 +842,7 @@ $('promptBox').addEventListener('input', () => {
 $('btnResetPrompt').onclick = () => {
   $('promptBox').value = state.lastTemplateText;
   $('btnResetPrompt').classList.add('hidden');
-  showToast('已恢复模板口令');
+  showToast(t("已恢复模板口令"));
 };
 
 $('milestoneSelect').onchange = async (e) => {
@@ -825,8 +852,8 @@ $('milestoneSelect').onchange = async (e) => {
 
 $('btnCopyPrompt').onclick = async () => {
   await navigator.clipboard.writeText($('promptBox').value);
-  showToast('口令已复制到剪贴板');
+  showToast(t("口令已复制到剪贴板"));
 };
 
 connectEvents();
-loadProjects(false).catch((e) => showToast(e.message));
+loadProjects().catch((e) => showToast(e.message));

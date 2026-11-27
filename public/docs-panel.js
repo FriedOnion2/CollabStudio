@@ -1,12 +1,13 @@
+import { language, shortcutModifier, t } from './locale.js';
 let toastTimer = null;
 
 export async function api(url, opts = {}) {
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
-    ...opts
+    ...opts,
+    headers: { 'Content-Type': 'application/json', 'X-Collab-Language': language, ...opts.headers }
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `请求失败 (${res.status})`);
+  if (!res.ok) throw new Error(data.error || t("请求失败 ({0})", res.status));
   return data;
 }
 
@@ -35,41 +36,41 @@ export function createDocsPanel({ onSaved }) {
   async function loadDoc(dir, file) {
     currentDir = dir;
     currentFile = file;
-    setStatus('读取中…');
+    setStatus(t("读取中…"));
     try {
       const data = await api(`/api/doc?dir=${encodeURIComponent(dir)}&file=${encodeURIComponent(file)}`);
       editorEl.value = data.content || '';
       dirty = false;
-      if (data.exists) setStatus('已同步');
-      else if (data.inherited) setStatus(`继承自「${data.inheritedFrom || '主项目'}」（保存将创建本子项目独立覆盖版）`);
-      else setStatus('文件尚未创建（保存即创建）');
+      if (data.exists) setStatus(t("已同步"));
+      else if (data.inherited) setStatus(t("继承自「{0}」（保存将创建本子项目独立覆盖版）", data.inheritedFrom || t("主项目")));
+      else setStatus(t("文件尚未创建（保存即创建）"));
     } catch (e) {
-      setStatus('读取失败');
+      setStatus(t("读取失败"));
       showToast(e.message);
     }
   }
 
   async function saveDoc() {
     if (!currentDir || !currentFile) return;
-    setStatus('保存中…');
+    setStatus(t("保存中…"));
     try {
       await api('/api/doc', {
         method: 'PUT',
         body: JSON.stringify({ dir: currentDir, file: currentFile, content: editorEl.value })
       });
       dirty = false;
-      setStatus('已保存');
-      showToast(`已保存 ${currentFile}`);
+      setStatus(t("已保存"));
+      showToast(t("已保存 {0}", currentFile));
       if (onSaved) onSaved(currentFile);
     } catch (e) {
-      setStatus('保存失败');
+      setStatus(t("保存失败"));
       showToast(e.message);
     }
   }
 
   editorEl.addEventListener('input', () => {
     dirty = true;
-    setStatus('未保存 (Ctrl+S)');
+    setStatus(t("未保存 ({0}+S)", shortcutModifier));
   });
 
   editorEl.addEventListener('keydown', (e) => {
@@ -82,6 +83,7 @@ export function createDocsPanel({ onSaved }) {
   saveBtn.addEventListener('click', saveDoc);
 
   return {
+    isDirty: () => dirty,
     async render(project, preserveFile = true) {
       const dirChanged = currentDir !== project.dir;
       if (!preserveFile || dirChanged || !project.docs.some((d) => d.key === currentFile)) {
@@ -93,10 +95,10 @@ export function createDocsPanel({ onSaved }) {
         btn.className = `tab doc-tab${doc.key === currentFile ? ' active' : ''}${doc.inherited ? ' inherited' : ''}`;
         btn.textContent = doc.inherited ? `${doc.label} ↗` : doc.label;
         btn.title = doc.inherited
-          ? `${doc.key}（继承自主项目，点击可查看或保存独立版）`
+          ? t("{0}（继承自主项目，点击可查看或保存独立版）", doc.key)
           : `${doc.key} (${doc.owner})`;
         btn.onclick = () => {
-          if (dirty && !confirm('当前文档有未保存修改，确定切换吗？')) return;
+          if (dirty && !confirm(t("当前文档有未保存修改，确定切换吗？"))) return;
           tabsEl.querySelectorAll('.doc-tab').forEach((t) => t.classList.remove('active'));
           btn.classList.add('active');
           loadDoc(project.dir, doc.key);

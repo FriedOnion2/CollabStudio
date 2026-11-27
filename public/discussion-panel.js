@@ -1,3 +1,4 @@
+import { locale, t } from './locale.js';
 import { api, showToast } from './docs-panel.js';
 import { populateModelSelect, populateEffortSelect } from './cli-panel.js';
 
@@ -37,7 +38,7 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
       btn.type = 'button';
       btn.className = `cli-chip${cls}${state.cli === id ? ' active' : ''}${info.available ? '' : ' unavailable'}`;
       btn.innerHTML = `<span class="cli-dot ${info.available ? 'ok' : 'miss'}"></span><span>${info.shortLabel}</span>`;
-      btn.title = `切换到 ${info.label} 参与当前方案讨论`;
+      btn.title = t("切换到 {0} 参与当前方案讨论", info.label);
       btn.onclick = () => {
         if (state.cli !== id) {
           state.cli = id;
@@ -56,14 +57,14 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
     const items = state.discussion.attachments || [];
     list.innerHTML = '';
     if (!items.length) {
-      list.innerHTML = '<span class="muted">尚未导入参考文件（支持点击「+ 导入文件」或直接拖拽文档/代码到此处）</span>';
+      list.innerHTML = `<span class="muted">${t("尚未导入参考文件（支持点击「+ 导入文件」或直接拖拽文档/代码到此处）")}</span>`;
       return;
     }
     for (const att of items) {
       const chip = document.createElement('span');
       chip.className = `attach-chip${att.exists === false ? ' missing' : ''}`;
-      chip.title = `${att.path}${att.isText ? '（文本内容将注入讨论上下文）' : '（非文本，仅传路径）'}`;
-      chip.innerHTML = `<span>${att.isText ? '📄' : '📎'} ${esc(att.name)}</span><span class="attach-size">${fmtSize(att.size)}</span><button type="button" class="attach-del" title="移除">×</button>`;
+      chip.title = `${att.path}${att.isText ? t("（文本内容将注入讨论上下文）") : t("（非文本，仅传路径）")}`;
+      chip.innerHTML = `<span>${att.isText ? '📄' : '📎'} ${esc(att.name)}</span><span class="attach-size">${fmtSize(att.size)}</span><button type="button" class="attach-del" title="${t("移除")}">×</button>`;
       chip.querySelector('.attach-del').onclick = () => removeAttachment(att.id);
       list.appendChild(chip);
     }
@@ -75,7 +76,7 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
 
     const badge = $('discTabBadge');
     if (state.discussion.planLocked) {
-      badge.textContent = '已定稿';
+      badge.textContent = t("已定稿");
       badge.className = 'cli-tab-badge locked';
       badge.classList.remove('hidden');
     } else if (msgs.length) {
@@ -92,8 +93,8 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
     if (!msgs.length) {
       thread.innerHTML = `
         <div class="disc-empty">
-          <div class="disc-empty-title">💡 先和模型聊透需求与方案，再正式生产</div>
-          <p>在下方输入你的需求想法、约束条件或上传 PRD / 参考代码文件，选定任意模型与思考强度进行多轮讨论（中途可随时切换模型复核）。方案满意后点击「确认方案并进入生产」，自动落盘到 <code>docs/01-brief.md</code> 并推进阶段。</p>
+          <div class="disc-empty-title">${t("💡 先和模型聊透需求与方案，再正式生产")}</div>
+          <p>${t("在下方输入你的需求想法、约束条件或上传 PRD / 参考代码文件，选定任意模型与思考强度进行多轮讨论（中途可随时切换模型复核）。方案满意后点击「确认方案并进入生产」，自动落盘到 <code>docs/01-brief.md</code> 并推进阶段。")}</p>
         </div>`;
       return;
     }
@@ -104,31 +105,31 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
     for (const m of msgs) {
       const card = document.createElement('div');
       card.className = `disc-msg ${m.role === 'user' ? 'user' : 'assistant'}`;
-      const timeStr = m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+      const timeStr = m.createdAt ? new Date(m.createdAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '';
 
       if (m.role === 'user') {
-        const attNote = m.attachmentNames?.length ? ` · 附带 ${m.attachmentNames.length} 个文件` : '';
+        const attNote = m.attachmentNames?.length ? t(" · 附带 {0} 个文件", m.attachmentNames.length) : '';
         card.innerHTML = `
-          <div class="disc-msg-head"><span>你${esc(attNote)}</span><span class="muted">${timeStr}</span></div>
+          <div class="disc-msg-head"><span>${t("你")}${esc(attNote)}</span><span class="muted">${timeStr}</span></div>
           <div class="disc-msg-body">${esc(m.content)}</div>`;
       } else {
-        const metaTags = [m.cliLabel || m.cli || '模型', m.model, m.effort ? `思考:${m.effort}` : ''].filter(Boolean).join(' · ');
-        const pendingTag = m.pending ? '<span class="disc-thinking">思考输出中…</span>' : '';
+        const metaTags = [m.cliLabel || m.cli || t("模型"), m.model, m.effort ? t("思考:{0}", m.effort) : ''].filter(Boolean).join(' · ');
+        const pendingTag = m.pending ? `<span class="disc-thinking">${t("思考输出中…")}</span>` : '';
         card.innerHTML = `
           <div class="disc-msg-head">
             <span class="disc-model-tag tag-${esc(m.cli || 'codex')}">${esc(metaTags)}</span>
             <div class="inline-actions">${pendingTag}<span class="muted">${timeStr}</span></div>
           </div>
-          <div class="disc-msg-body">${esc(m.content || (m.pending ? '正在等待模型响应…' : ''))}</div>
+          <div class="disc-msg-body">${esc(m.content || (m.pending ? t("正在等待模型响应…") : ''))}</div>
           ${m.pending ? '' : `<div class="disc-msg-actions">
-            <button type="button" class="btn-link act-copy">复制</button>
-            <button type="button" class="btn-link act-brief">仅写入 01-brief</button>
-            <button type="button" class="btn-link act-prod">采纳并进入生产 →</button>
+            <button type="button" class="btn-link act-copy">${t("复制")}</button>
+            <button type="button" class="btn-link act-brief">${t("仅写入 01-brief")}</button>
+            <button type="button" class="btn-link act-prod">${t("采纳并进入生产 →")}</button>
           </div>`}`;
         if (!m.pending) {
           card.querySelector('.act-copy').onclick = async () => {
             await navigator.clipboard.writeText(m.content || '');
-            showToast('已复制方案回复');
+            showToast(t("已复制方案回复"));
           };
           card.querySelector('.act-brief').onclick = () => openFinalizeModal(m.content, false);
           card.querySelector('.act-prod').onclick = () => openFinalizeModal(m.content, true);
@@ -169,7 +170,7 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
 
   async function pickAndAttachFiles() {
     const dir = getActiveDir();
-    if (!dir) return showToast('请先选择或新建项目');
+    if (!dir) return showToast(t("请先选择或新建项目"));
     try {
       let paths = [];
       if (window.electronAPI?.pickFiles) {
@@ -185,9 +186,9 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
       });
       state.discussion = data.discussion;
       renderAttachments();
-      showToast(`已导入 ${paths.length} 个参考文件`);
+      showToast(t("已导入 {0} 个参考文件", paths.length));
     } catch (e) {
-      showToast(`导入失败：${e.message}`);
+      showToast(t("导入失败：{0}", e.message));
     }
   }
 
@@ -197,7 +198,7 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
     const uploads = [];
     for (const file of Array.from(fileList)) {
       if (file.size > 5 * 1024 * 1024) {
-        showToast(`跳过超大文件：${file.name} (>5MB)`);
+        showToast(t("跳过超大文件：{0} (>5MB)", file.name));
         continue;
       }
       const buf = await file.arrayBuffer();
@@ -214,9 +215,9 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
       });
       state.discussion = data.discussion;
       renderAttachments();
-      showToast(`已拖入 ${uploads.length} 个文件`);
+      showToast(t("已拖入 {0} 个文件", uploads.length));
     } catch (e) {
-      showToast(`上传失败：${e.message}`);
+      showToast(t("上传失败：{0}", e.message));
     }
   }
 
@@ -232,15 +233,15 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
 
   async function sendMessage() {
     const dir = getActiveDir();
-    if (!dir) return showToast('请先选择或新建项目');
-    if (state.activeRunId) return showToast('当前模型仍在回复中，请稍候或先点击停止');
+    if (!dir) return showToast(t("请先选择或新建项目"));
+    if (state.activeRunId) return showToast(t("当前模型仍在回复中，请稍候或先点击停止"));
     const input = $('discInput');
     const message = input.value.trim();
-    if (!message) return showToast('请先输入你的需求或讨论问题');
+    if (!message) return showToast(t("请先输入你的需求或讨论问题"));
 
     try {
       input.value = '';
-      const res = await api('/api/discussion/send', {
+      await api('/api/discussion/send', {
         method: 'POST',
         body: JSON.stringify({
           dir,
@@ -250,10 +251,7 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
           effort: state.effort
         })
       });
-      state.discussion = res.discussion;
-      state.activeRunId = res.run.id;
-      state.streamingMsgId = res.assistantMsg.id;
-      renderMessages(true);
+      if (state.dir === dir) await load(dir);
     } catch (e) {
       input.value = message;
       showToast(e.message);
@@ -267,7 +265,7 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
         method: 'POST',
         body: JSON.stringify({ runId: state.activeRunId })
       });
-      showToast('已停止本轮讨论');
+      showToast(t("已停止本轮讨论"));
     } catch (e) {
       showToast(e.message);
     }
@@ -279,7 +277,7 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
     const lastUser = [...msgs].reverse().find((m) => m.role === 'user' && m.content);
     const fallback = prefillText || lastAssistant?.content || lastUser?.content || '';
     if (!fallback.trim()) {
-      return showToast('还没有可定稿的方案内容，请先输入需求并与模型讨论');
+      return showToast(t("还没有可定稿的方案内容，请先输入需求并与模型讨论"));
     }
     $('finalizePlanText').value = fallback;
     $('finalizeStageSelect').value = enterProduction ? '2' : '0';
@@ -290,7 +288,7 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
     const dir = getActiveDir();
     if (!dir) return;
     const planText = $('finalizePlanText').value.trim();
-    if (!planText) return showToast('方案内容不能为空');
+    if (!planText) return showToast(t("方案内容不能为空"));
     const mode = $('finalizeModeSelect').value;
     const advanceToStage = Number($('finalizeStageSelect').value || 0);
     try {
@@ -301,7 +299,7 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
       state.discussion = res.discussion;
       $('finalizeModalBackdrop').classList.add('hidden');
       renderMessages(false);
-      showToast(advanceToStage ? `方案已写入 01-brief.md，已进入阶段 ${advanceToStage} 生产！` : '方案已写入 docs/01-brief.md');
+      showToast(advanceToStage ? t("方案已写入 01-brief.md，已进入阶段 {0} 生产！", advanceToStage) : t("方案已写入 docs/01-brief.md"));
       if (onPlanFinalized) onPlanFinalized({ advanceToStage, state: res.state });
     } catch (e) {
       showToast(e.message);
@@ -334,7 +332,7 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
   // Bind controls
   $('discModelSelect').onchange = (e) => {
     if (e.target.value === '__custom__') {
-      const custom = prompt('请输入自定义模型名称（留空恢复默认）：', state.model || '');
+      const custom = prompt(t("请输入自定义模型名称（留空恢复默认）："), state.model || '');
       if (custom !== null) state.model = custom.trim();
     } else {
       state.model = e.target.value;
@@ -354,14 +352,14 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
 
   $('btnClearDisc').onclick = async () => {
     const dir = getActiveDir();
-    if (!dir || !confirm('确定清空当前项目的讨论记录吗？（已导入的参考文件会保留）')) return;
+    if (!dir || !confirm(t("确定清空当前项目的讨论记录吗？（已导入的参考文件会保留）"))) return;
     const data = await api('/api/discussion/clear', {
       method: 'POST',
       body: JSON.stringify({ dir, keepAttachments: true })
     });
     state.discussion = data.discussion;
     renderMessages(true);
-    showToast('讨论记录已清空');
+    showToast(t("讨论记录已清空"));
   };
 
   $('discInput').addEventListener('keydown', (e) => {
