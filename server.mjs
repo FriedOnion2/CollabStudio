@@ -1,0 +1,184 @@
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { execFile, spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import {
+  ALLOWED_DOCS, loadRegistry, registerProject, unregisterProject,
+  scaffoldProject, inspectProject, writeProjectState
+} from './lib/store.mjs';
+import { STAGES, buildPrompts } from './lib/prompts.mjs';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PUBLIC_DIR = path.join(__dirname, 'public');
+const PORT = Number(process.env.PORT || 43980);
+const AUTO_EXIT = process.env.NO_AUTO_EXIT !== '1';
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.svg': 'image/svg+xml'
+};
+
+const sseClients = new Set();
+let shutdownTimer = null;
+
+function scheduleAutoExit() {
+  if (!AUTO_EXIT) return;
+  clearTimeout(shutdownTimer);
+  shutdownTimer = setTimeout(() => {
+    if (sseClients.size === 0) process.exit(0);
+  }, 8000);
+}
+
+function sendJson(res, status, data) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify(data));
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let raw = '';
+    req.on('data', (c) => { raw += c; if (raw.length > 2_000_000) reject(new Error('Body too large')); });
+    req.on('end', () => { try { resolve(raw ? JSON.parse(raw) : {}); } catch (e) { reject(e); } });
+    req.on('error', reject);
+  });
+}
+
+function isAllowedDoc(file) {
+  return ALLOWED_DOCS.some((d) => d.key === file);
+}
+
+function pickFolderDialog() {
+  return new Promise((resolve) => {
+    const ps = [
+      'Add-Type -AssemblyName System.Windows.Forms;',
+      '$f = New-Object System.Windows.Forms.FolderBrowserDialog;',
+      '$f.Description = "选择或新建项目文件夹";',
+      '$f.ShowNewFolderButton = $true;',
+      'if ($f.ShowDialog() -eq "OK") { Write-Output $f.SelectedPath }'
+    ].join(' ');
+    execFile('powershell.exe', ['-NoProfile', '-STA', '-Command', ps], { windowsHide: true }, (err, stdout) => {
+      resolve(err ? '' : stdout.trim());
+    });
+  });
+}
+
+const server = http.createServer(async (req, res) => {
+  try {
+    const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
+    const p = url.pathname;
+
+    if (p === '/api/health') return sendJson(res, 200, { ok: true, pid: process.pid });
+
+    if (p === '/api/events') {
+      clearTimeout(shutdownTimer);
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+      res.write('data: {"type":"connected"}\n\n');
+      sseClients.add(res);
+      req.on('close', () => { sseClients.delete(res); if (sseClients.size === 0) scheduleAutoExit(); });
+      return;
+    }
+
+    if (p === '/api/shutdown' && req.method === 'POST') {
+      sendJson(res, 200, { ok: true });
+      setTimeout(() => process.exit(0), 150);
+      return;
+    }
+
+    if (p === '/api/pick-folder' && req.method === 'POST') {
+      const selected = await pickFolderDialog();
+      return sendJson(res, 200, { dir: selected });
+    }
+
+    if (p === '/api/open-folder' && req.method === 'POST') {
+      const { target } = await readBody(req);
+      if (!target || !fs.existsSync(target)) return sendJson(res, 404, { error: '路径不存在' });
+      spawn('explorer.exe', [path.resolve(target)], { detached: true, stdio: 'ignore' }).unref();
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (p === '/api/projects' && req.method === 'GET') {
+      const list = loadRegistry().map((item) => inspectProject(item.dir, item.name));
+      return sendJson(res, 200, { stages: STAGES, projects: list });
+    }
+
+    if (p === '/api/projects/init' && req.method === 'POST') {
+      const { dir, name, initScaffold = true } = await readBody(req);
+      if (!dir || !dir.trim()) return sendJson(res, 400, { error: '请填写项目目录' });
+      const absDir = path.resolve(dir.trim());
+      if (initScaffold) await scaffoldProject(absDir, name);
+      const entry = registerProject(absDir, name);
+      const project = inspectProject(entry.dir, entry.name);
+      return sendJson(res, 200, { project, prompts: buildPrompts(project) });
+    }
+
+    if (p === '/api/projects' && req.method === 'DELETE') {
+      const dir = url.searchParams.get('dir');
+      if (!dir) return sendJson(res, 400, { error: '缺少 dir 参数' });
+      unregisterProject(dir);
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (p === '/api/project' && req.method === 'GET') {
+      const dir = url.searchParams.get('dir');
+      const ms = url.searchParams.get('milestone') || '';
+      if (!dir) return sendJson(res, 400, { error: '缺少 dir 参数' });
+      const project = inspectProject(dir);
+      const activeMs = ms || project.milestones.find((m) => m.doneCount < m.totalCount)?.title || project.milestones[0]?.title || 'Milestone 1';
+      return sendJson(res, 200, { stages: STAGES, project, activeMilestone: activeMs, prompts: buildPrompts(project, activeMs) });
+    }
+
+    if (p === '/api/project/state' && req.method === 'PATCH') {
+      const { dir, patch } = await readBody(req);
+      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: '项目目录不存在' });
+      const state = writeProjectState(dir, patch || {});
+      return sendJson(res, 200, { state });
+    }
+
+    if (p === '/api/doc' && req.method === 'GET') {
+      const dir = url.searchParams.get('dir');
+      const file = url.searchParams.get('file');
+      if (!dir || !isAllowedDoc(file)) return sendJson(res, 400, { error: '无效文档路径' });
+      const full = path.join(path.resolve(dir), file);
+      const content = fs.existsSync(full) ? fs.readFileSync(full, 'utf8') : '';
+      return sendJson(res, 200, { file, exists: fs.existsSync(full), content });
+    }
+
+    if (p === '/api/doc' && req.method === 'PUT') {
+      const { dir, file, content } = await readBody(req);
+      if (!dir || !isAllowedDoc(file)) return sendJson(res, 400, { error: '无效文档路径' });
+      const full = path.join(path.resolve(dir), file);
+      fs.mkdirSync(path.dirname(full), { recursive: true });
+      fs.writeFileSync(full, String(content ?? ''), 'utf8');
+      return sendJson(res, 200, { ok: true });
+    }
+
+    const rel = p === '/' ? 'index.html' : p.replace(/^\/+/, '');
+    const filePath = path.resolve(PUBLIC_DIR, rel);
+    if (!filePath.startsWith(PUBLIC_DIR) || !fs.existsSync(filePath)) {
+      res.writeHead(404); return res.end('Not Found');
+    }
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
+    fs.createReadStream(filePath).pipe(res);
+  } catch (err) {
+    sendJson(res, 500, { error: err.message || 'Internal Error' });
+  }
+});
+
+export function startServer(port = PORT) {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, '127.0.0.1', () => {
+      const addr = server.address();
+      resolve({ server, port: addr.port, url: `http://127.0.0.1:${addr.port}` });
+    });
+  });
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  startServer(PORT).then(({ url }) => console.log(`CollabStudio listening on ${url}`));
+}
