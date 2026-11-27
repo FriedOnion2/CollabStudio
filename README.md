@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.0-3b82f6?style=flat-square" alt="version" />
+  <img src="https://img.shields.io/badge/version-1.1.1-3b82f6?style=flat-square" alt="version" />
   <img src="https://img.shields.io/badge/runtime-Electron%20%7C%20Node.js%2018%2B-10b981?style=flat-square" alt="runtime" />
   <img src="https://img.shields.io/badge/dependencies-Zero%20Runtime%20Deps-f59e0b?style=flat-square" alt="zero-deps" />
   <img src="https://img.shields.io/badge/license-MIT-64748b?style=flat-square" alt="license" />
