@@ -40,7 +40,9 @@ export function createDocsPanel({ onSaved }) {
       const data = await api(`/api/doc?dir=${encodeURIComponent(dir)}&file=${encodeURIComponent(file)}`);
       editorEl.value = data.content || '';
       dirty = false;
-      setStatus(data.exists ? '已同步' : '文件尚未创建（保存即创建）');
+      if (data.exists) setStatus('已同步');
+      else if (data.inherited) setStatus(`继承自「${data.inheritedFrom || '主项目'}」（保存将创建本子项目独立覆盖版）`);
+      else setStatus('文件尚未创建（保存即创建）');
     } catch (e) {
       setStatus('读取失败');
       showToast(e.message);
@@ -88,9 +90,11 @@ export function createDocsPanel({ onSaved }) {
       tabsEl.innerHTML = '';
       for (const doc of project.docs) {
         const btn = document.createElement('button');
-        btn.className = `tab doc-tab${doc.key === currentFile ? ' active' : ''}`;
-        btn.textContent = doc.label;
-        btn.title = `${doc.key} (${doc.owner})`;
+        btn.className = `tab doc-tab${doc.key === currentFile ? ' active' : ''}${doc.inherited ? ' inherited' : ''}`;
+        btn.textContent = doc.inherited ? `${doc.label} ↗` : doc.label;
+        btn.title = doc.inherited
+          ? `${doc.key}（继承自主项目，点击可查看或保存独立版）`
+          : `${doc.key} (${doc.owner})`;
         btn.onclick = () => {
           if (dirty && !confirm('当前文档有未保存修改，确定切换吗？')) return;
           tabsEl.querySelectorAll('.doc-tab').forEach((t) => t.classList.remove('active'));

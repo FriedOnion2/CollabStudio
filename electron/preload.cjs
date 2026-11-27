@@ -1,5 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  pickFolder: () => ipcRenderer.invoke('dialog:pickFolder')
+  pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
+  pickFiles: () => ipcRenderer.invoke('dialog:pickFiles')
 });

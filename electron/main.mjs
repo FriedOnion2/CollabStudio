@@ -57,6 +57,14 @@ ipcMain.handle('dialog:pickFolder', async () => {
   return res.canceled ? '' : (res.filePaths[0] || '');
 });
 
+ipcMain.handle('dialog:pickFiles', async () => {
+  const res = await dialog.showOpenDialog(mainWindow, {
+    title: '选择要导入讨论的参考文件（支持多选）',
+    properties: ['openFile', 'multiSelections']
+  });
+  return res.canceled ? [] : (res.filePaths || []);
+});
+
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {

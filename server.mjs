@@ -5,9 +5,19 @@ import { execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
   ALLOWED_DOCS, loadRegistry, registerProject, unregisterProject,
-  scaffoldProject, inspectProject, writeProjectState
+  scaffoldProject, inspectProject, inspectScope, findParentProject,
+  registerSubproject, unregisterSubproject, scanSubprojectCandidates, writeProjectState
 } from './lib/store.mjs';
 import { STAGES, buildPrompts } from './lib/prompts.mjs';
+import {
+  detectAllClis, saveCliConfig, listRuns,
+  startInlineRun, launchExternalTerminal, stopRun, stopAllRuns, CLI_PROFILES
+} from './lib/cli.mjs';
+import {
+  readDiscussion, addAttachmentPaths, addUploadedAttachments, removeAttachment,
+  clearDiscussion, appendDiscussionMessage, updateDiscussionMessage,
+  buildDiscussionPrompt, finalizePlanToBrief
+} from './lib/discussion.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -27,6 +37,13 @@ const MIME = {
 const sseClients = new Set();
 let shutdownTimer = null;
 
+function broadcastEvent(payload) {
+  const msg = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const client of sseClients) {
+    try { client.write(msg); } catch { sseClients.delete(client); }
+  }
+}
+
 function scheduleAutoExit() {
   if (!AUTO_EXIT) return;
   clearTimeout(shutdownTimer);
@@ -43,7 +60,7 @@ function sendJson(res, status, data) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let raw = '';
-    req.on('data', (c) => { raw += c; if (raw.length > 2_000_000) reject(new Error('Body too large')); });
+    req.on('data', (c) => { raw += c; if (raw.length > 12_000_000) reject(new Error('Body too large')); });
     req.on('end', () => { try { resolve(raw ? JSON.parse(raw) : {}); } catch (e) { reject(e); } });
     req.on('error', reject);
   });
@@ -69,6 +86,23 @@ function pickFolderDialog() {
   });
 }
 
+function pickFilesDialog() {
+  if (process.platform !== 'win32') return Promise.resolve([]);
+  return new Promise((resolve) => {
+    const ps = [
+      'Add-Type -AssemblyName System.Windows.Forms;',
+      '$f = New-Object System.Windows.Forms.OpenFileDialog;',
+      '$f.Title = "选择要导入讨论的参考文件";',
+      '$f.Multiselect = $true;',
+      'if ($f.ShowDialog() -eq "OK") { $f.FileNames | ForEach-Object { Write-Output $_ } }'
+    ].join(' ');
+    execFile('powershell.exe', ['-NoProfile', '-STA', '-Command', ps], { windowsHide: true }, (err, stdout) => {
+      if (err || !stdout) return resolve([]);
+      resolve(stdout.split(/\r?\n/).map((s) => s.trim()).filter(Boolean));
+    });
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host || `${HOST}:${PORT}`}`);
@@ -86,9 +120,156 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (p === '/api/shutdown' && req.method === 'POST') {
+      stopAllRuns();
       sendJson(res, 200, { ok: true });
       setTimeout(() => process.exit(0), 150);
       return;
+    }
+
+    if (p === '/api/cli/status' && req.method === 'GET') {
+      const data = await detectAllClis({
+        withVersion: url.searchParams.get('version') !== '0',
+        withModels: true
+      });
+      return sendJson(res, 200, data);
+    }
+
+    if (p === '/api/cli/config' && req.method === 'PUT') {
+      const body = await readBody(req);
+      saveCliConfig(body || {});
+      const data = await detectAllClis({ withVersion: true, withModels: true });
+      return sendJson(res, 200, data);
+    }
+
+    if (p === '/api/cli/runs' && req.method === 'GET') {
+      const dir = url.searchParams.get('dir') || '';
+      return sendJson(res, 200, { runs: listRuns(dir) });
+    }
+
+    if (p === '/api/cli/run' && req.method === 'POST') {
+      const { cli, dir, prompt, mode = 'inline', permissionMode = 'default', model = '', effort = '' } = await readBody(req);
+      const run = mode === 'terminal'
+        ? await launchExternalTerminal({ cli, dir, prompt, permissionMode, model, effort }, broadcastEvent)
+        : await startInlineRun({ cli, dir, prompt, permissionMode, model, effort }, broadcastEvent);
+      return sendJson(res, 200, { run });
+    }
+
+    if (p === '/api/cli/stop' && req.method === 'POST') {
+      const { runId } = await readBody(req);
+      if (!runId) return sendJson(res, 400, { error: '缺少 runId 参数' });
+      const run = stopRun(runId, broadcastEvent);
+      return sendJson(res, 200, { run });
+    }
+
+    if (p === '/api/pick-files' && req.method === 'POST') {
+      const paths = await pickFilesDialog();
+      return sendJson(res, 200, { paths });
+    }
+
+    if (p === '/api/discussion' && req.method === 'GET') {
+      const dir = url.searchParams.get('dir');
+      if (!dir) return sendJson(res, 400, { error: '缺少 dir 参数' });
+      return sendJson(res, 200, { discussion: readDiscussion(dir) });
+    }
+
+    if (p === '/api/discussion/attachments' && req.method === 'POST') {
+      const { dir, paths = [], uploads = [] } = await readBody(req);
+      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: '项目目录不存在' });
+      let discussion = readDiscussion(dir);
+      if (Array.isArray(paths) && paths.length) discussion = addAttachmentPaths(dir, paths);
+      if (Array.isArray(uploads) && uploads.length) discussion = addUploadedAttachments(dir, uploads);
+      return sendJson(res, 200, { discussion });
+    }
+
+    if (p === '/api/discussion/attachments' && req.method === 'DELETE') {
+      const dir = url.searchParams.get('dir');
+      const id = url.searchParams.get('id');
+      if (!dir || !id) return sendJson(res, 400, { error: '缺少参数' });
+      const discussion = removeAttachment(dir, id);
+      return sendJson(res, 200, { discussion });
+    }
+
+    if (p === '/api/discussion/clear' && req.method === 'POST') {
+      const { dir, keepAttachments = true } = await readBody(req);
+      if (!dir) return sendJson(res, 400, { error: '缺少 dir 参数' });
+      const discussion = clearDiscussion(dir, { keepAttachments });
+      return sendJson(res, 200, { discussion });
+    }
+
+    if (p === '/api/discussion/send' && req.method === 'POST') {
+      const { dir, message, cli = 'antigravity', model = '', effort = '', permissionMode = 'default' } = await readBody(req);
+      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: '项目目录不存在' });
+      const text = String(message || '').trim();
+      if (!text) return sendJson(res, 400, { error: '请先输入需求或讨论内容' });
+
+      const project = inspectScope(dir);
+      const beforeDisc = readDiscussion(dir);
+      const fullPrompt = buildDiscussionPrompt({
+        dir,
+        projectName: project.state.name,
+        userMessage: text,
+        discussion: beforeDisc,
+        parentDir: project.parentDir,
+        parentName: project.parentName
+      });
+
+      const userMsg = appendDiscussionMessage(dir, {
+        role: 'user',
+        content: text,
+        attachmentNames: beforeDisc.attachments.map((a) => a.name)
+      });
+
+      const cliLabel = CLI_PROFILES[cli]?.label || cli;
+      const assistantMsg = appendDiscussionMessage(dir, {
+        role: 'assistant',
+        cli,
+        cliLabel,
+        model: String(model || '').trim(),
+        effort: String(effort || '').trim(),
+        pending: true,
+        status: 'running',
+        content: ''
+      });
+
+      try {
+        const run = await startInlineRun({
+          cli,
+          dir,
+          prompt: fullPrompt,
+          permissionMode,
+          model,
+          effort,
+          kind: 'discussion',
+          promptPreviewOverride: `[讨论] ${text}`,
+          onComplete: (finishedRun) => {
+            updateDiscussionMessage(dir, assistantMsg.id, {
+              pending: false,
+              status: finishedRun.status,
+              exitCode: finishedRun.exitCode,
+              runId: finishedRun.id,
+              content: finishedRun.output?.trim() || `(执行结束，无文本输出，exit=${finishedRun.exitCode})`
+            });
+            broadcastEvent({ type: 'discussion:updated', dir: path.resolve(dir), msgId: assistantMsg.id, runId: finishedRun.id });
+          }
+        }, broadcastEvent);
+
+        updateDiscussionMessage(dir, assistantMsg.id, { runId: run.id });
+        return sendJson(res, 200, { discussion: readDiscussion(dir), userMsg, assistantMsg: { ...assistantMsg, runId: run.id }, run });
+      } catch (err) {
+        updateDiscussionMessage(dir, assistantMsg.id, {
+          pending: false,
+          status: 'failed',
+          content: `启动失败：${err.message}`
+        });
+        throw err;
+      }
+    }
+
+    if (p === '/api/discussion/finalize' && req.method === 'POST') {
+      const { dir, planText, mode = 'replace', advanceToStage = 2 } = await readBody(req);
+      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: '项目目录不存在' });
+      const result = finalizePlanToBrief({ dir, planText, mode, advanceToStage });
+      return sendJson(res, 200, result);
     }
 
     if (p === '/api/pick-folder' && req.method === 'POST') {
@@ -128,11 +309,43 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    if (p === '/api/subprojects/scan' && req.method === 'GET') {
+      const dir = url.searchParams.get('dir');
+      if (!dir) return sendJson(res, 400, { error: '缺少 dir 参数' });
+      const candidates = scanSubprojectCandidates(dir);
+      return sendJson(res, 200, { candidates });
+    }
+
+    if (p === '/api/subprojects/add' && req.method === 'POST') {
+      const { rootDir, items = [], initScaffold = true, includeRules = false } = await readBody(req);
+      if (!rootDir) return sendJson(res, 400, { error: '缺少 rootDir 参数' });
+      if (!Array.isArray(items) || !items.length) return sendJson(res, 400, { error: '请至少指定一个子项目' });
+      const added = [];
+      for (const item of items) {
+        added.push(registerSubproject(rootDir, {
+          relPath: item.relPath || item.dir,
+          name: item.name,
+          initScaffold,
+          includeRules
+        }));
+      }
+      const project = inspectProject(rootDir);
+      return sendJson(res, 200, { project, added });
+    }
+
+    if (p === '/api/subprojects' && req.method === 'DELETE') {
+      const rootDir = url.searchParams.get('rootDir');
+      const relPath = url.searchParams.get('relPath');
+      if (!rootDir || !relPath) return sendJson(res, 400, { error: '缺少参数' });
+      unregisterSubproject(rootDir, relPath);
+      return sendJson(res, 200, { project: inspectProject(rootDir) });
+    }
+
     if (p === '/api/project' && req.method === 'GET') {
       const dir = url.searchParams.get('dir');
       const ms = url.searchParams.get('milestone') || '';
       if (!dir) return sendJson(res, 400, { error: '缺少 dir 参数' });
-      const project = inspectProject(dir);
+      const project = inspectScope(dir);
       const activeMs = ms || project.milestones.find((m) => m.doneCount < m.totalCount)?.title || project.milestones[0]?.title || 'Milestone 1';
       return sendJson(res, 200, { stages: STAGES, project, activeMilestone: activeMs, prompts: buildPrompts(project, activeMs) });
     }
@@ -148,9 +361,28 @@ const server = http.createServer(async (req, res) => {
       const dir = url.searchParams.get('dir');
       const file = url.searchParams.get('file');
       if (!dir || !isAllowedDoc(file)) return sendJson(res, 400, { error: '无效文档路径' });
-      const full = path.join(path.resolve(dir), file);
-      const content = fs.existsSync(full) ? fs.readFileSync(full, 'utf8') : '';
-      return sendJson(res, 200, { file, exists: fs.existsSync(full), content });
+      const absDir = path.resolve(dir);
+      const full = path.join(absDir, file);
+      if (fs.existsSync(full)) {
+        return sendJson(res, 200, { file, exists: true, inherited: false, content: fs.readFileSync(full, 'utf8') });
+      }
+      const docMeta = ALLOWED_DOCS.find((d) => d.key === file);
+      if (docMeta?.isRule) {
+        const parent = findParentProject(absDir);
+        if (parent) {
+          const parentFull = path.join(parent.parentDir, file);
+          if (fs.existsSync(parentFull)) {
+            return sendJson(res, 200, {
+              file,
+              exists: false,
+              inherited: true,
+              inheritedFrom: parent.parentName,
+              content: fs.readFileSync(parentFull, 'utf8')
+            });
+          }
+        }
+      }
+      return sendJson(res, 200, { file, exists: false, inherited: false, content: '' });
     }
 
     if (p === '/api/doc' && req.method === 'PUT') {
@@ -173,6 +405,8 @@ const server = http.createServer(async (req, res) => {
     sendJson(res, 500, { error: err.message || 'Internal Error' });
   }
 });
+
+server.on('close', stopAllRuns);
 
 export function startServer(port = PORT, host = HOST) {
   return new Promise((resolve, reject) => {
