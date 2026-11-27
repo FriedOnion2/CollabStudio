@@ -11,6 +11,7 @@ import { STAGES, buildPrompts } from './lib/prompts.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT || 43980);
 const AUTO_EXIT = process.env.NO_AUTO_EXIT !== '1';
 const MIME = {
@@ -53,6 +54,7 @@ function isAllowedDoc(file) {
 }
 
 function pickFolderDialog() {
+  if (process.platform !== 'win32') return Promise.resolve('');
   return new Promise((resolve) => {
     const ps = [
       'Add-Type -AssemblyName System.Windows.Forms;',
@@ -97,7 +99,10 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/open-folder' && req.method === 'POST') {
       const { target } = await readBody(req);
       if (!target || !fs.existsSync(target)) return sendJson(res, 404, { error: '路径不存在' });
-      spawn('explorer.exe', [path.resolve(target)], { detached: true, stdio: 'ignore' }).unref();
+      const cmd = process.platform === 'win32' ? 'explorer.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+      const child = spawn(cmd, [path.resolve(target)], { detached: true, stdio: 'ignore' });
+      child.on('error', () => {});
+      child.unref();
       return sendJson(res, 200, { ok: true });
     }
 
@@ -169,16 +174,17 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-export function startServer(port = PORT) {
+export function startServer(port = PORT, host = HOST) {
   return new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(port, '127.0.0.1', () => {
+    server.listen(port, host, () => {
       const addr = server.address();
-      resolve({ server, port: addr.port, url: `http://127.0.0.1:${addr.port}` });
+      const displayHost = host === '0.0.0.0' ? '127.0.0.1' : host;
+      resolve({ server, port: addr.port, host, url: `http://${displayHost}:${addr.port}` });
     });
   });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  startServer(PORT).then(({ url }) => console.log(`CollabStudio listening on ${url}`));
+  startServer(PORT, HOST).then(({ url, host, port }) => console.log(`CollabStudio listening on ${url} (bind ${host}:${port})`));
 }

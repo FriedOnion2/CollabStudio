@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "dev:web": "node server.mjs",
-    "build:win": "electron-packager . CollabStudio --platform=win32 --arch=x64 --icon=assets/icon.ico --out=dist --overwrite --ignore=\"^/(dist|data|\\.edge-profile|_smoke_tmp|CollabStudio\\.vbs|启动CollabStudio\\.bat|launcher\\.mjs)\""
+    "build:win": "electron-packager . CollabStudio --platform=win32 --arch=x64 --icon=assets/icon.ico --out=dist --overwrite --ignore=\"^/(dist|release|data|\\.edge-profile|_smoke_tmp|CollabStudio\\.vbs|启动CollabStudio\\.bat|launcher\\.mjs)\""
   },
   "devDependencies": {
     "@electron/packager": "^18.4.4",
