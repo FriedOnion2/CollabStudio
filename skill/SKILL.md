@@ -21,8 +21,8 @@ All handoffs happen through repository files (`AGENTS.md`, `CLAUDE.md`, and
 
 For any new project directory `<dir>` and name `<name>`, run the initializer:
 
-```powershell
-F:\SnowLuma\node.exe C:\Users\kmn40\.gemini\config\skills\dual-agent-collab\scripts\init-project.mjs "<dir>" "<name>"
+```bash
+node ~/.gemini/config/skills/dual-agent-collab/scripts/init-project.mjs "<dir>" "<name>"
 ```
 
 This scaffolds `AGENTS.md`, `CLAUDE.md`, `docs/01-brief.md` through
@@ -105,5 +105,5 @@ CollabStudio).
 
 Users can manage projects, stage gates, `AGENTS.md`/`CLAUDE.md`/`GEMINI.md`,
 docs, and one-click prompts for all three agents in the standalone Electron app
-**CollabStudio** (`F:\CollabStudio\dist\CollabStudio-win32-x64\CollabStudio.exe`). Keep
+**CollabStudio** (standalone desktop app or web server). Keep
 `<project>/.collab-state.json` in sync when updating stage or gates.

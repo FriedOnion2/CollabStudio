@@ -71,7 +71,7 @@ function pickFolderDialog() {
 
 const server = http.createServer(async (req, res) => {
   try {
-    const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
+    const url = new URL(req.url, `http://${req.headers.host || `${HOST}:${PORT}`}`);
     const p = url.pathname;
 
     if (p === '/api/health') return sendJson(res, 200, { ok: true, pid: process.pid });
