@@ -76,8 +76,13 @@ export function createCliPanel({
   onRunFinished,
   onCatalogUpdated,
   onSaveStageRouting,
-  onRightTabChanged
+  onRightTabChanged,
+  onFillFixPrompt,
+  onSnapshotRestored
 }) {
+  const savedPerm = (() => {
+    try { return localStorage.getItem('collab_cli_perm') || 'auto'; } catch { return 'auto'; }
+  })();
   const state = {
     clis: [],
     catalog: { codex: [], claude: [], antigravity: [], efforts: [] },
@@ -86,11 +91,12 @@ export function createCliPanel({
     selectedEffort: '',
     manualOverride: false,
     mode: 'inline',
-    permissionMode: 'default',
+    permissionMode: ['default', 'auto', 'bypass'].includes(savedPerm) ? savedPerm : 'auto',
     runs: [],
     activeRunId: null,
     rightTab: 'discuss'
   };
+  if ($('cliPermSelect')) $('cliPermSelect').value = state.permissionMode;
 
   function getCliInfo(id) {
     return state.clis.find((c) => c.id === id);
@@ -105,15 +111,19 @@ export function createCliPanel({
     const isDiscuss = tab === 'discuss';
     const isDocs = tab === 'docs';
     const isCli = tab === 'cli';
+    const isPreview = tab === 'preview';
     $('tabRightDiscuss').classList.toggle('active', isDiscuss);
     $('tabRightDocs').classList.toggle('active', isDocs);
     $('tabRightCli').classList.toggle('active', isCli);
+    $('tabRightPreview').classList.toggle('active', isPreview);
     $('discussPane').classList.toggle('hidden', !isDiscuss);
     $('docsPane').classList.toggle('hidden', !isDocs);
     $('cliPane').classList.toggle('hidden', !isCli);
+    $('previewPane').classList.toggle('hidden', !isPreview);
     $('discussHeaderActions').classList.toggle('hidden', !isDiscuss);
     $('docsHeaderActions').classList.toggle('hidden', !isDocs);
     $('cliHeaderActions').classList.toggle('hidden', !isCli);
+    $('previewHeaderActions').classList.toggle('hidden', !isPreview);
     if (isCli) scrollConsoleToBottom(true);
     if (onRightTabChanged) onRightTabChanged(tab);
   }
@@ -210,6 +220,10 @@ export function createCliPanel({
       $('cliRunMeta').textContent = t("选择左侧任意 CLI（Codex / Claude / AGY）与模型/思考强度后点击「运行」即可实时查看输出");
       $('cliConsole').textContent = '';
       $('btnStopCli').classList.add('hidden');
+      $('btnBypassRetryCli').classList.add('hidden');
+      $('btnRetryCli').classList.add('hidden');
+      $('btnFixCli').classList.add('hidden');
+      $('btnRollbackRun').classList.add('hidden');
       return;
     }
 
@@ -239,7 +253,16 @@ export function createCliPanel({
     const actText = active.activity ? t("状态：{0}   |   ", active.activity) : '';
     $('cliRunMeta').textContent = actText + t("{0}   |   目录: {1}", active.commandDisplay, active.dir);
     $('cliConsole').textContent = active.consoleLog || active.output || (active.status === 'running' ? t("正在启动 CLI，等待输出…") : t("(无文本输出)"));
-    $('btnStopCli').classList.toggle('hidden', active.status !== 'running');
+    const isRunning = active.status === 'running';
+    const hasPrompt = Boolean(active.prompt);
+    $('btnStopCli').classList.toggle('hidden', !isRunning);
+    $('btnRetryCli').classList.toggle('hidden', isRunning || !hasPrompt);
+    $('btnFixCli').classList.toggle('hidden', isRunning || !hasPrompt);
+    $('btnBypassRetryCli').classList.toggle(
+      'hidden',
+      !hasPrompt || (!active.needsPermission && active.status !== 'failed' && active.status !== 'stopped')
+    );
+    $('btnRollbackRun').classList.toggle('hidden', !active.snapshotId);
     scrollConsoleToBottom(false);
   }
 
@@ -302,25 +325,22 @@ export function createCliPanel({
     }
   }
 
-  async function runSelectedCli() {
+  async function runSelectedCli(overrides = {}) {
     const dir = getActiveDir();
     if (!dir) return showToast(t("请先选择或新建一个项目"));
-    const prompt = getPromptText().trim();
-    if (state.mode === 'inline' && !prompt) {
+    const prompt = String(overrides.prompt ?? getPromptText()).trim();
+    const mode = overrides.mode || state.mode;
+    const permissionMode = overrides.permissionMode || state.permissionMode;
+    const cli = overrides.cli || state.selectedCli;
+    const model = overrides.model !== undefined ? overrides.model : state.selectedModel;
+    const effort = overrides.effort !== undefined ? overrides.effort : state.selectedEffort;
+    if (mode === 'inline' && !prompt) {
       return showToast(t("内置直跑模式需要输入或选择执行口令"));
     }
     try {
       const res = await api('/api/cli/run', {
         method: 'POST',
-        body: JSON.stringify({
-          cli: state.selectedCli,
-          model: state.selectedModel,
-          effort: state.selectedEffort,
-          dir,
-          prompt,
-          mode: state.mode,
-          permissionMode: state.permissionMode
-        })
+        body: JSON.stringify({ cli, model, effort, dir, prompt, mode, permissionMode })
       });
       const run = res.run;
       // Live events may arrive before the response and already hold newer output.
@@ -328,9 +348,68 @@ export function createCliPanel({
       state.activeRunId = run.id;
       setRightTab('cli');
       renderRunPanel();
-      showToast(state.mode === 'terminal' ? t("已在外部终端启动 {0}", run.cliLabel) : t("已启动 {0}", run.cliLabel));
+      showToast(mode === 'terminal' ? t("已在外部终端启动 {0}", run.cliLabel) : t("已启动 {0}", run.cliLabel));
     } catch (e) {
       showToast(e.message);
+    }
+  }
+
+  async function retryActiveRun({ forceBypass = false } = {}) {
+    const active = getActiveRun();
+    if (!active || !active.prompt) return showToast(t("当前记录没有可重跑的原始指令"));
+    if (active.status === 'running') {
+      await stopActiveRun();
+    }
+    if (forceBypass) {
+      state.permissionMode = 'bypass';
+      $('cliPermSelect').value = 'bypass';
+      try { localStorage.setItem('collab_cli_perm', 'bypass'); } catch {}
+    }
+    await runSelectedCli({
+      prompt: active.prompt,
+      mode: 'inline',
+      permissionMode: forceBypass ? 'bypass' : state.permissionMode
+    });
+  }
+
+  function fillFixPromptFromActiveRun() {
+    const active = getActiveRun();
+    if (!active) return;
+    const rawLog = (active.consoleLog || active.output || '').trim();
+    const tail = rawLog.length > 2600 ? t("…(已省略前段)\n{0}", rawLog.slice(-2600)) : rawLog;
+    const fixText = [
+      t("【手动纠错任务】上次使用 {0} 执行未达预期（状态：{1}，exit={2}）。", active.cliLabel, active.status, active.exitCode ?? '?'),
+      t("请直接基于以下报错/输出日志定位根因，修正问题并重新验证通过："),
+      ``,
+      t("### 原指令摘要"),
+      active.promptPreview || t("(无)"),
+      ``,
+      t("### 上次执行日志（尾部）"),
+      '```',
+      tail || t("(无文本输出)"),
+      '```',
+      ``,
+      t("### 人类补充要求（可在此直接修改补充）"),
+      t("- 请修复上述错误后重新运行验证，确认无误再汇报。")
+    ].join('\n');
+    if (onFillFixPrompt) onFillFixPrompt(fixText);
+    showToast(t("已将报错纠错指令填入左侧口令框，可修改后直接点击「运行」或切换其他 CLI"));
+  }
+
+  async function rollbackActiveRunSnapshot() {
+    const active = getActiveRun();
+    const dir = getActiveDir();
+    if (!dir || !active?.snapshotId) return;
+    if (!confirm(t("确定将 docs/01~05、规则文件与阶段状态回退到本次 CLI 运行前的快照吗？（系统会在回退前自动再留一份当前备份）"))) return;
+    try {
+      const res = await api('/api/snapshots/restore', {
+        method: 'POST',
+        body: JSON.stringify({ dir, snapshotId: active.snapshotId })
+      });
+      showToast(t("已回退 {0} 个文件（已自动备份当前状态）", res.restoredFiles?.length || 0));
+      if (onSnapshotRestored) onSnapshotRestored();
+    } catch (e) {
+      showToast(t("回退失败：{0}", e.message));
     }
   }
 
@@ -367,6 +446,7 @@ export function createCliPanel({
       if (!run) return;
       run.activity = evt.activity || run.activity;
       if (evt.pid) run.pid = evt.pid;
+      if (evt.needsPermission) run.needsPermission = true;
       if (evt.usage) run.usage = evt.usage;
       if (run.id === state.activeRunId) renderRunPanel();
       return;
@@ -412,6 +492,7 @@ export function createCliPanel({
   $('tabRightDiscuss').onclick = () => setRightTab('discuss');
   $('tabRightDocs').onclick = () => setRightTab('docs');
   $('tabRightCli').onclick = () => setRightTab('cli');
+  $('tabRightPreview').onclick = () => setRightTab('preview');
 
   $('cliModeSelect').onchange = (e) => {
     state.mode = e.target.value;
@@ -420,6 +501,7 @@ export function createCliPanel({
 
   $('cliPermSelect').onchange = (e) => {
     state.permissionMode = e.target.value;
+    try { localStorage.setItem('collab_cli_perm', state.permissionMode); } catch {}
   };
 
   $('cliModelSelect').onchange = (e) => {
@@ -451,8 +533,12 @@ export function createCliPanel({
     }
   };
 
-  $('btnRunCli').onclick = runSelectedCli;
+  $('btnRunCli').onclick = () => runSelectedCli();
   $('btnStopCli').onclick = stopActiveRun;
+  $('btnRetryCli').onclick = () => retryActiveRun({ forceBypass: false });
+  $('btnBypassRetryCli').onclick = () => retryActiveRun({ forceBypass: true });
+  $('btnFixCli').onclick = fillFixPromptFromActiveRun;
+  $('btnRollbackRun').onclick = rollbackActiveRunSnapshot;
 
   $('cliRunSelect').onchange = (e) => {
     state.activeRunId = e.target.value;

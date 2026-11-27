@@ -24,7 +24,7 @@
       </div>
 
       <select id="languageSelect" class="select-sm language-select" aria-label="语言" data-i18n-attrs="aria-label">
-        <option value="zh" lang="zh-CN">简体中文</option>
+        <option value="zh" lang="zh-CN" data-i18n>简体中文</option>
         <option value="en" lang="en">English</option>
       </select>
 
@@ -132,10 +132,10 @@
                   <option value="inline" data-i18n>内置直跑（实时输出）</option>
                   <option value="terminal" data-i18n>外部终端（交互会话）</option>
                 </select>
-                <select id="cliPermSelect" class="select-sm" title="CLI 工具权限策略" data-i18n-attrs="title">
-                  <option value="default" data-i18n>权限：默认</option>
-                  <option value="auto" data-i18n>权限：自动写文件</option>
-                  <option value="bypass" data-i18n>权限：跳过确认</option>
+                <select id="cliPermSelect" class="select-sm" title="CLI 工具权限策略（推荐自动放行或免确认以防卡审批）" data-i18n-attrs="title" >
+                  <option value="auto" selected data-i18n>权限：自动放行（推荐）</option>
+                  <option value="bypass" data-i18n>权限：完全免确认（防卡死）</option>
+                  <option value="default" data-i18n>权限：严格默认</option>
                 </select>
                 <button id="btnRunCli" class="btn btn-primary btn-sm" type="button" data-i18n>▶ 运行</button>
               </div>
@@ -153,13 +153,17 @@
             <div class="card-head">
               <div class="right-mode-tabs">
                 <button id="tabRightDiscuss" class="mode-tab active" type="button">
-                  <span data-i18n>需求与方案讨论</span>
+                  <span data-i18n>需求讨论</span>
                   <span id="discTabBadge" class="cli-tab-badge hidden"></span>
                 </button>
-                <button id="tabRightDocs" class="mode-tab" type="button" data-i18n>交接文档 SSOT</button>
+                <button id="tabRightDocs" class="mode-tab" type="button" data-i18n>SSOT 文档</button>
                 <button id="tabRightCli" class="mode-tab" type="button">
-                  <span data-i18n>CLI 终端输出</span>
+                  <span data-i18n>CLI 终端</span>
                   <span id="cliTabBadge" class="cli-tab-badge hidden"></span>
+                </button>
+                <button id="tabRightPreview" class="mode-tab" type="button">
+                  <span data-i18n>交付验收</span>
+                  <span id="previewTabBadge" class="cli-tab-badge hidden"></span>
                 </button>
               </div>
               <div id="discussHeaderActions" class="inline-actions">
@@ -168,12 +172,22 @@
               </div>
               <div id="docsHeaderActions" class="inline-actions hidden">
                 <span id="docStatus" class="muted" data-i18n>已同步</span>
+                <button id="btnOpenSnapshots" class="btn btn-sm" type="button" title="查看运行前自动快照或手动创建/回退" data-i18n data-i18n-attrs="title" >⏱ 快照</button>
                 <button id="btnSaveDoc" class="btn btn-primary btn-sm" data-i18n>保存文档</button>
               </div>
               <div id="cliHeaderActions" class="inline-actions hidden">
                 <span id="cliRunStatus" class="cli-status-pill" data-i18n>空闲</span>
                 <button id="btnStopCli" class="btn btn-danger btn-sm hidden" type="button" data-i18n>■ 停止</button>
-                <button id="btnCopyCliOutput" class="btn btn-sm" type="button" data-i18n>复制输出</button>
+                <button id="btnBypassRetryCli" class="btn btn-amber btn-sm hidden" type="button" title="切换完全免确认权限并立即重跑本次任务" data-i18n data-i18n-attrs="title" >🔓 免确认重试</button>
+                <button id="btnRetryCli" class="btn btn-sm hidden" type="button" title="用当前左侧选中的 CLI/模型/强度重跑" data-i18n data-i18n-attrs="title" >↻ 重试</button>
+                <button id="btnFixCli" class="btn btn-sm hidden" type="button" title="自动带上本次报错日志填入指令框以便纠错" data-i18n data-i18n-attrs="title" >🔧 纠错</button>
+                <button id="btnRollbackRun" class="btn btn-sm hidden" type="button" title="一键恢复到本次 CLI 运行前的文档快照" data-i18n data-i18n-attrs="title" >↶ 回退</button>
+                <button id="btnCopyCliOutput" class="btn btn-sm" type="button" data-i18n>复制</button>
+              </div>
+              <div id="previewHeaderActions" class="inline-actions hidden">
+                <button id="btnRescanDeliverables" class="btn btn-sm" type="button" title="重新扫描项目产物与脚本" data-i18n data-i18n-attrs="title" >🔄 扫描</button>
+                <button id="btnReloadPreview" class="btn btn-sm" type="button" data-i18n>↻ 刷新</button>
+                <button id="btnOpenPreviewExternal" class="btn btn-primary btn-sm" type="button" data-i18n>↗ 浏览器打开</button>
               </div>
             </div>
 
@@ -181,8 +195,13 @@
               <div class="disc-config-bar">
                 <span class="cli-bar-label" data-i18n>讨论模型</span>
                 <div id="discCliSwitch" class="cli-target-switch"></div>
-                <select id="discModelSelect" class="select-sm disc-model-sel" title="讨论使用的具体模型" data-i18n-attrs="title"></select>
-                <select id="discEffortSelect" class="select-sm select-effort" title="讨论思考强度" data-i18n-attrs="title"></select>
+                <select id="discModelSelect" class="select-sm disc-model-sel" title="讨论使用的具体模型" data-i18n-attrs="title" ></select>
+                <select id="discEffortSelect" class="select-sm select-effort" title="讨论思考强度" data-i18n-attrs="title" ></select>
+                <select id="discPermSelect" class="select-sm select-perm-mini" title="讨论期 CLI 权限（自动放行外部附件目录读取，防卡审批）" data-i18n-attrs="title" >
+                  <option value="auto" selected data-i18n>自动放行</option>
+                  <option value="bypass" data-i18n>完全免确认</option>
+                  <option value="default" data-i18n>严格默认</option>
+                </select>
               </div>
               <div id="discAttachList" class="disc-attach-bar"></div>
               <div id="discThread" class="disc-thread"></div>
@@ -211,6 +230,46 @@
               </div>
               <div id="cliRunMeta" class="cli-run-meta mono-path"></div>
               <pre id="cliConsole" class="cli-console"></pre>
+            </div>
+
+            <div id="previewPane" class="right-pane hidden">
+              <div class="preview-toolbar">
+                <select id="previewTargetSelect" class="select-sm preview-target-sel" title="选择要预览的交付页面或自定义本机地址" data-i18n-attrs="title" ></select>
+                <select id="previewViewportSelect" class="select-sm preview-vp-sel" title="切换验收视口宽度" data-i18n-attrs="title" >
+                  <option value="auto" data-i18n>视口：自适应</option>
+                  <option value="desktop" data-i18n>桌面 1280px</option>
+                  <option value="tablet" data-i18n>平板 768px</option>
+                  <option value="mobile" data-i18n>手机 390px</option>
+                </select>
+              </div>
+              <div id="previewScriptsBar" class="preview-scripts-bar"></div>
+              <div id="previewRecentBox" class="preview-recent-box hidden"></div>
+              <div id="previewScriptLogBox" class="preview-script-log-box hidden">
+                <div class="preview-script-log-head">
+                  <span id="previewScriptTitle" class="muted"></span>
+                  <div class="inline-actions">
+                    <button id="btnUseDetectedUrl" class="btn btn-emerald btn-sm hidden" type="button"></button>
+                    <button id="btnStopPreviewScript" class="btn btn-danger btn-sm hidden" type="button" data-i18n>■ 停止</button>
+                    <button id="btnCloseScriptLog" class="btn-link" type="button">✕</button>
+                  </div>
+                </div>
+                <pre id="previewScriptLog" class="preview-script-log"></pre>
+              </div>
+              <div id="previewEmpty" class="preview-empty">
+                <div class="disc-empty">
+                  <div class="disc-empty-title" data-i18n>👁 交付效果实时预览与验收</div>
+                  <p data-i18n-rich>当前项目尚未扫描到 <code>.html</code> 原型或构建产物。你可以通过上方「快捷验证」启动本地开发服务，或从下拉框选择「+ 输入自定义本机地址」直接预览 <code>http://localhost:...</code>。</p>
+                </div>
+              </div>
+              <div id="previewFrameWrap" class="preview-frame-wrap hidden" data-viewport="auto">
+                <iframe id="previewFrame" class="preview-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" allow="fullscreen; autoplay; gamepad"></iframe>
+              </div>
+              <div class="preview-feedback-bar">
+                <input id="previewFeedbackInput" class="preview-feedback-input" type="text" placeholder="记录验收问题（例如：主舞台太暗 / 按钮位置重叠 / 某交互报错）…" data-i18n-attrs="placeholder" />
+                <button id="btnLogFeedback" class="btn btn-sm" type="button" title="追加结构化验收单到 docs/05-review-log.md" data-i18n data-i18n-attrs="title" >📝 记验收单</button>
+                <button id="btnReworkFeedback" class="btn btn-amber btn-sm" type="button" title="记入验收单并立即填入左侧口令框派给模型返工" data-i18n data-i18n-attrs="title" >🔧 发给模型返工</button>
+                <button id="btnApproveGate" class="btn btn-emerald btn-sm" type="button" title="确认当前阶段交付满意并勾选门禁通过" data-i18n data-i18n-attrs="title" >✓ 验收通过</button>
+              </div>
             </div>
           </section>
         </div>
@@ -365,6 +424,24 @@
           <button id="btnCancelSubModal2" class="btn" type="button" data-i18n>取消</button>
           <button id="btnConfirmSubScan" class="btn btn-primary" type="button" data-i18n>批量导入选中子项目</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="snapModalBackdrop" class="modal-backdrop hidden">
+    <div class="modal modal-wide">
+      <div class="modal-head">
+        <h3 data-i18n>文档快照与一键回退</h3>
+        <button id="btnCloseSnapModal" class="btn-link">✕</button>
+      </div>
+      <div class="muted" data-i18n-rich>每次内置 CLI 开跑前都会自动备份 <code>docs/01~05</code>、规则文件与 <code>.collab-state.json</code>；回退前也会再自动留一份安全备份，放心操作。</div>
+      <div class="input-row">
+        <input id="inputSnapLabel" type="text" placeholder="可选：输入手动快照备注，例如「阶段2定稿前」" data-i18n-attrs="placeholder" />
+        <button id="btnCreateSnap" class="btn btn-primary btn-sm" type="button" data-i18n>+ 新建快照</button>
+      </div>
+      <div id="snapList" class="sub-scan-list"></div>
+      <div class="modal-actions">
+        <button id="btnDoneSnapModal" class="btn" type="button" data-i18n>关闭</button>
       </div>
     </div>
   </div>

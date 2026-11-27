@@ -1,7 +1,8 @@
-import { language, localizePage, setLanguage, shortcutModifier, t } from './locale.js';
+import { language, locale, localizePage, setLanguage, shortcutModifier, t } from './locale.js';
 import { api, showToast, createDocsPanel } from './docs-panel.js';
 import { createCliPanel, populateModelSelect, populateEffortSelect } from './cli-panel.js';
 import { createDiscussionPanel } from './discussion-panel.js';
+import { createPreviewPanel } from './preview-panel.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -108,12 +109,36 @@ const discussionPanel = createDiscussionPanel({
   }
 });
 
+const previewPanel = createPreviewPanel({
+  getActiveDir: () => state.activeDir,
+  onSendRework: (promptText) => {
+    const box = $('promptBox');
+    box.value = promptText;
+    $('btnResetPrompt').classList.remove('hidden');
+    box.focus();
+    box.scrollTop = 0;
+  },
+  onFeedbackSaved: () => refreshActive(true),
+  onApproveCurrentGate: async () => {
+    const stageNum = state.detail?.project?.state?.stage || 1;
+    const key = `g${stageNum}`;
+    await patchState({ gates: { [key]: true } });
+    showToast(t("已验收通过，阶段 {0} 门禁已勾选！", stageNum));
+  }
+});
+
 const cliPanel = createCliPanel({
   getActiveDir: () => state.activeDir,
   getPromptText: () => $('promptBox').value,
   getActiveStage: () => state.detail?.project?.state?.stage || 1,
   onRunFinished: (run) => {
-    if (dirEq(state.activeDir, run.dir)) refreshActive(true);
+    if (dirEq(state.activeDir, run.dir)) {
+      refreshActive(true);
+      previewPanel.refreshIfLoaded();
+    }
+  },
+  onRightTabChanged: (tab) => {
+    if (tab === 'preview' && state.activeDir) previewPanel.load(state.activeDir, { autoReload: false });
   },
   onCatalogUpdated: ({ clis, catalog }) => {
     discussionPanel.setCatalog({ clis, catalog });
@@ -123,6 +148,16 @@ const cliPanel = createCliPanel({
     const stageNum = String(state.detail?.project?.state?.stage || 1);
     await patchState({ stageRouting: { [stageNum]: route } });
     showToast(t("已保存为阶段 {0} 默认模型与思考强度", stageNum));
+  },
+  onFillFixPrompt: (fixText) => {
+    const box = $('promptBox');
+    box.value = fixText;
+    $('btnResetPrompt').classList.remove('hidden');
+    box.focus();
+    box.scrollTop = 0;
+  },
+  onSnapshotRestored: () => {
+    refreshActive(false);
   }
 });
 
@@ -137,6 +172,7 @@ function connectEvents() {
       const evt = JSON.parse(e.data);
       cliPanel.handleSseEvent(evt);
       discussionPanel.handleSseEvent(evt);
+      previewPanel.handleSseEvent(evt);
     } catch {}
   };
   es.onerror = () => {
@@ -575,7 +611,7 @@ async function runSubprojectScan() {
     for (const c of candidates) {
       const row = document.createElement('label');
       row.className = `sub-scan-item${c.alreadyAdded ? ' added' : ''}`;
-      const tagsHtml = (c.tags || []).map((t) => `<span class="scan-tag${t === 'Collab' ? ' collab' : ''}">${esc(t)}</span>`).join('');
+      const tagsHtml = (c.tags || []).map((t) => `<span class="scan-tag${t === 'Collab' ? ' collab' : ''}">${esc(time)}</span>`).join('');
       row.innerHTML = `
         <div class="sub-scan-left">
           <input type="checkbox" class="scan-chk" data-rel="${esc(c.relPath)}" data-name="${esc(c.name)}" ${c.alreadyAdded ? 'disabled' : (c.tags?.length ? 'checked' : '')} />
@@ -619,7 +655,12 @@ async function selectProject(dir, preserveDoc = false) {
   state.activeDir = dir;
   state.lastSyncedStage = null;
   renderSidebar();
-  await Promise.all([refreshActive(preserveDoc), cliPanel.loadRuns(dir), discussionPanel.load(dir)]);
+  await Promise.all([
+    refreshActive(preserveDoc),
+    cliPanel.loadRuns(dir),
+    discussionPanel.load(dir),
+    previewPanel.load(dir, { autoReload: false })
+  ]);
 }
 
 async function refreshActive(preserveDoc = true) {
@@ -853,6 +894,64 @@ $('milestoneSelect').onchange = async (e) => {
 $('btnCopyPrompt').onclick = async () => {
   await navigator.clipboard.writeText($('promptBox').value);
   showToast(t("口令已复制到剪贴板"));
+};
+
+async function renderSnapshotsModal() {
+  if (!state.activeDir) return;
+  const list = $('snapList');
+  list.innerHTML = `<div class="muted">${t("加载快照列表中…")}</div>`;
+  try {
+    const { snapshots } = await api(`/api/snapshots?dir=${encodeURIComponent(state.activeDir)}`);
+    list.innerHTML = '';
+    if (!snapshots.length) {
+      list.innerHTML = `<div class="muted">${t("暂无快照（每次内置运行 CLI 前都会自动创建，也可以在上方手动新建）")}</div>`;
+      return;
+    }
+    for (const s of snapshots) {
+      const row = document.createElement('div');
+      row.className = 'snap-item';
+      const time = s.createdAt ? new Date(s.createdAt).toLocaleString(locale) : '';
+      row.innerHTML = `
+        <div class="snap-info">
+          <div class="snap-title" title="${esc(s.label)}">${esc(s.label)}</div>
+          <div class="snap-sub">${esc(time)} · ${t("{0} 个文件", s.fileCount)}${s.cli ? ` · ${esc(s.cli)}` : ''}</div>
+        </div>
+        <button type="button" class="btn btn-sm act-restore">${t("↶ 回退到此快照")}</button>`;
+      row.querySelector('.act-restore').onclick = async () => {
+        if (!confirm(t("确定恢复到快照「{0}」吗？（系统会先自动备份当前文档状态）", s.label))) return;
+        const res = await api('/api/snapshots/restore', {
+          method: 'POST',
+          body: JSON.stringify({ dir: state.activeDir, snapshotId: s.id })
+        });
+        showToast(t("已回退 {0} 个文件", res.restoredFiles?.length || 0));
+        await Promise.all([refreshActive(false), renderSnapshotsModal()]);
+      };
+      list.appendChild(row);
+    }
+  } catch (e) {
+    list.innerHTML = `<div class="muted">${t("加载失败：{0}", esc(e.message))}</div>`;
+  }
+}
+
+$('btnOpenSnapshots').onclick = () => {
+  if (!state.activeDir) return;
+  $('inputSnapLabel').value = '';
+  $('snapModalBackdrop').classList.remove('hidden');
+  renderSnapshotsModal();
+};
+$('btnCloseSnapModal').onclick = () => $('snapModalBackdrop').classList.add('hidden');
+$('btnDoneSnapModal').onclick = () => $('snapModalBackdrop').classList.add('hidden');
+$('btnCreateSnap').onclick = async () => {
+  if (!state.activeDir) return;
+  try {
+    await api('/api/snapshots/create', {
+      method: 'POST',
+      body: JSON.stringify({ dir: state.activeDir, label: $('inputSnapLabel').value.trim() || t("手动保存快照") })
+    });
+    $('inputSnapLabel').value = '';
+    showToast(t("已创建文档快照"));
+    await renderSnapshotsModal();
+  } catch (e) { showToast(e.message); }
 };
 
 connectEvents();

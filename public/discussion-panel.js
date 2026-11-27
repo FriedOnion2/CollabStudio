@@ -12,6 +12,9 @@ function fmtSize(bytes = 0) {
 }
 
 export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
+  const savedDiscPerm = (() => {
+    try { return localStorage.getItem('collab_disc_perm') || 'auto'; } catch { return 'auto'; }
+  })();
   const state = {
     dir: null,
     clis: [],
@@ -19,15 +22,20 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
     cli: 'antigravity',
     model: '',
     effort: 'high',
+    permissionMode: ['default', 'auto', 'bypass'].includes(savedDiscPerm) ? savedDiscPerm : 'auto',
     discussion: { planLocked: false, attachments: [], messages: [] },
     activeRunId: null,
     streamingMsgId: null,
+    editingMsgId: null,
     liveActivity: '',
     livePid: null,
-    liveStartedAt: null
+    liveStartedAt: null,
+    liveNeedsPerm: false
   };
+  if ($('discPermSelect')) $('discPermSelect').value = state.permissionMode;
 
   let discussionLoad = 0;
+  let pendingRetry = null;
 
   function liveLabel(startedAt) {
     const status = state.liveActivity || t("正在等待模型响应…");
@@ -123,33 +131,82 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
       card.className = `disc-msg ${m.role === 'user' ? 'user' : 'assistant'}`;
       const timeStr = m.createdAt ? new Date(m.createdAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '';
 
+      const isEditing = state.editingMsgId === m.id;
+
       if (m.role === 'user') {
         const attNote = m.attachmentNames?.length ? t(" · 附带 {0} 个文件", m.attachmentNames.length) : '';
         card.innerHTML = `
           <div class="disc-msg-head"><span>${t("你")}${esc(attNote)}</span><span class="muted">${timeStr}</span></div>
-          <div class="disc-msg-body">${esc(m.content)}</div>`;
+          ${isEditing
+            ? `<textarea class="disc-edit-area">${esc(m.content)}</textarea>
+               <div class="disc-msg-actions">
+                 <button type="button" class="btn-link act-edit-cancel">${t("取消")}</button>
+                 <button type="button" class="btn-link act-prod act-edit-save">${t("保存修改")}</button>
+               </div>`
+            : `<div class="disc-msg-body">${esc(m.content)}</div>
+               <div class="disc-msg-actions">
+                 <button type="button" class="btn-link act-retry" title="${t("用当前选中的模型重新回复这条需求")}">${t("↻ 重跑本条")}</button>
+                 <button type="button" class="btn-link act-edit">${t("✎ 编辑")}</button>
+                 <button type="button" class="btn-link act-del">${t("🗑 删除")}</button>
+               </div>`}`;
+        if (isEditing) {
+          card.querySelector('.act-edit-cancel').onclick = () => { state.editingMsgId = null; renderMessages(false); };
+          card.querySelector('.act-edit-save').onclick = () => saveEditedMessage(m.id, card.querySelector('.disc-edit-area').value);
+        } else {
+          card.querySelector('.act-retry').onclick = () => retryMessage(m.id, false);
+          card.querySelector('.act-edit').onclick = () => { state.editingMsgId = m.id; renderMessages(false); };
+          card.querySelector('.act-del').onclick = () => deleteMessage(m.id);
+        }
       } else {
         const metaTags = [m.cliLabel || m.cli || t("模型"), m.model, m.effort ? t("思考:{0}", m.effort) : ''].filter(Boolean).join(' · ');
         const isLive = Boolean(m.pending);
+        const isFailed = m.status === 'failed' || m.status === 'stopped';
         const pendingTag = isLive
           ? `<span class="disc-thinking"><span class="live-pulse"></span><span class="disc-live-label">${esc(liveLabel(m.createdAt))}</span></span>`
-          : (m.status === 'failed' ? `<span class="disc-failed-tag">${t("执行失败")}</span>` : '');
+          : (isFailed ? `<span class="disc-failed-tag">${t(m.status === 'stopped' ? "已终止" : "执行失败")}</span>` : '');
         card.innerHTML = `
           <div class="disc-msg-head">
             <span class="disc-model-tag tag-${esc(m.cli || 'codex')}">${esc(metaTags)}</span>
             <div class="inline-actions">${pendingTag}<span class="muted">${timeStr}</span></div>
           </div>
-          <div class="disc-msg-body">${esc(m.content || (isLive ? t("正在等待模型响应…") : ''))}</div>
-          ${isLive
-            ? `<div class="disc-msg-actions"><button type="button" class="btn-link act-stop" style="color:var(--danger)">${t("■ 停止本轮")}</button></div>`
-            : `<div class="disc-msg-actions">
-            <button type="button" class="btn-link act-copy">${t("复制")}</button>
-            <button type="button" class="btn-link act-brief">${t("仅写入 01-brief")}</button>
-            <button type="button" class="btn-link act-prod">${t("采纳并进入生产 →")}</button>
-          </div>`}`;
-        if (isLive) {
+          ${isEditing
+            ? `<textarea class="disc-edit-area">${esc(m.content || '')}</textarea>
+               <div class="disc-msg-actions">
+                 <button type="button" class="btn-link act-edit-cancel">${t("取消")}</button>
+                 <button type="button" class="btn-link act-prod act-edit-save">${t("保存手动纠错")}</button>
+               </div>`
+            : `<div class="disc-msg-body">${esc(m.content || (isLive ? t("正在等待模型响应…") : ''))}</div>
+               ${isLive
+                 ? `<div class="disc-msg-actions">
+                      ${state.liveNeedsPerm ? `<button type="button" class="btn-link act-warn act-bypass-live">${t("🔓 停止并免确认重试")}</button>` : ''}
+                      <button type="button" class="btn-link act-stop" style="color:var(--danger)">${t("■ 停止本轮")}</button>
+                    </div>`
+                 : `<div class="disc-msg-actions">
+                      <button type="button" class="btn-link act-retry" title="${t("用当前顶部选中的模型/思考强度原地重试本轮")}">${t("↻ 重试")}</button>
+                      ${isFailed ? `<button type="button" class="btn-link act-warn act-bypass-retry">${t("🔓 免确认重试")}</button>` : ''}
+                      <button type="button" class="btn-link act-edit">${t("✎ 编辑")}</button>
+                      <button type="button" class="btn-link act-del">${t("🗑 删除")}</button>
+                      <button type="button" class="btn-link act-copy">${t("复制")}</button>
+                      <button type="button" class="btn-link act-brief">${t("仅写入 01-brief")}</button>
+                      <button type="button" class="btn-link act-prod">${t("采纳并进入生产 →")}</button>
+                    </div>`}`}`;
+        if (isEditing) {
+          card.querySelector('.act-edit-cancel').onclick = () => { state.editingMsgId = null; renderMessages(false); };
+          card.querySelector('.act-edit-save').onclick = () => saveEditedMessage(m.id, card.querySelector('.disc-edit-area').value);
+        } else if (isLive) {
           card.querySelector('.act-stop').onclick = stopDiscussionRun;
+          const bLive = card.querySelector('.act-bypass-live');
+          if (bLive) bLive.onclick = async () => {
+            if (pendingRetry || !state.activeRunId) return;
+            pendingRetry = { dir: state.dir, msgId: m.id, runId: state.activeRunId };
+            if (!await stopDiscussionRun()) pendingRetry = null;
+          };
         } else {
+          card.querySelector('.act-retry').onclick = () => retryMessage(m.id, false);
+          const bRetry = card.querySelector('.act-bypass-retry');
+          if (bRetry) bRetry.onclick = () => retryMessage(m.id, true);
+          card.querySelector('.act-edit').onclick = () => { state.editingMsgId = m.id; renderMessages(false); };
+          card.querySelector('.act-del').onclick = () => deleteMessage(m.id);
           card.querySelector('.act-copy').onclick = async () => {
             await navigator.clipboard.writeText(m.content || '');
             showToast(t("已复制方案回复"));
@@ -186,6 +243,7 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
       state.activeRunId = runningMsg?.runId || null;
       state.streamingMsgId = runningMsg?.id || null;
       state.liveActivity = run?.activity || '';
+      state.liveNeedsPerm = Boolean(run?.needsPermission);
       state.livePid = run?.pid || null;
       state.liveStartedAt = run?.startedAt || runningMsg?.createdAt || null;
       if (runningMsg && run?.output) runningMsg.content = run.output;
@@ -277,7 +335,8 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
           message,
           cli: state.cli,
           model: state.model,
-          effort: state.effort
+          effort: state.effort,
+          permissionMode: state.permissionMode
         })
       });
       if (state.dir === dir) await load(dir);
@@ -290,6 +349,67 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
     }
   }
 
+  async function saveEditedMessage(msgId, content) {
+    const dir = getActiveDir();
+    if (!dir) return;
+    try {
+      const data = await api('/api/discussion/message', {
+        method: 'PATCH',
+        body: JSON.stringify({ dir, msgId, content })
+      });
+      state.discussion = data.discussion;
+      state.editingMsgId = null;
+      renderMessages(false);
+      showToast(t("已保存手动修改"));
+    } catch (e) {
+      showToast(e.message);
+    }
+  }
+
+  async function deleteMessage(msgId) {
+    const dir = getActiveDir();
+    if (!dir || !confirm(t("确定删除这条消息吗？"))) return;
+    try {
+      const data = await api(`/api/discussion/message?dir=${encodeURIComponent(dir)}&id=${encodeURIComponent(msgId)}`, {
+        method: 'DELETE'
+      });
+      state.discussion = data.discussion;
+      if (state.editingMsgId === msgId) state.editingMsgId = null;
+      renderMessages(false);
+      showToast(t("已删除该条消息"));
+    } catch (e) {
+      showToast(e.message);
+    }
+  }
+
+  async function retryMessage(msgId, forceBypass = false) {
+    const dir = getActiveDir();
+    if (!dir) return;
+    if (state.activeRunId) return showToast(t("当前仍有模型在回复中，请先停止后再重试"));
+    if (forceBypass) {
+      state.permissionMode = 'bypass';
+      if ($('discPermSelect')) $('discPermSelect').value = 'bypass';
+      try { localStorage.setItem('collab_disc_perm', 'bypass'); } catch {}
+    }
+    try {
+      await api('/api/discussion/retry', {
+        method: 'POST',
+        body: JSON.stringify({
+          dir,
+          msgId,
+          cli: state.cli,
+          model: state.model,
+          effort: state.effort,
+          permissionMode: forceBypass ? 'bypass' : state.permissionMode
+        })
+      });
+      if (state.dir === dir) await load(dir);
+    } catch (e) {
+      showToast(e.message);
+      if (state.dir) load(state.dir);
+    }
+  }
+
   async function stopDiscussionRun() {
     if (!state.activeRunId) return;
     try {
@@ -298,8 +418,10 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
         body: JSON.stringify({ runId: state.activeRunId })
       });
       showToast(t("已停止本轮讨论"));
+      return true;
     } catch (e) {
       showToast(e.message);
+      return false;
     }
   }
 
@@ -343,7 +465,12 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
     if (evt.type === 'cli:activity' && evt.runId && evt.runId === state.activeRunId) {
       state.liveActivity = evt.activity || state.liveActivity;
       if (evt.pid) state.livePid = evt.pid;
-      updateLiveLabel();
+      if (Boolean(evt.needsPermission) !== state.liveNeedsPerm) {
+        state.liveNeedsPerm = Boolean(evt.needsPermission);
+        renderMessages(false);
+      } else {
+        updateLiveLabel();
+      }
       return;
     }
     if (evt.type === 'cli:output' && evt.runId && evt.runId === state.activeRunId) {
@@ -356,7 +483,11 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
     }
 
     if (evt.type === 'discussion:updated' && state.dir && evt.dir?.toLowerCase() === state.dir.toLowerCase()) {
-      load(state.dir);
+      const retry = pendingRetry?.runId === evt.runId ? pendingRetry : null;
+      if (retry) pendingRetry = null;
+      load(state.dir).then(() => {
+        if (retry && state.dir === retry.dir) return retryMessage(retry.msgId, true);
+      });
     }
   }
 
@@ -377,6 +508,11 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
 
   $('discEffortSelect').onchange = (e) => {
     state.effort = e.target.value;
+  };
+
+  $('discPermSelect').onchange = (e) => {
+    state.permissionMode = e.target.value;
+    try { localStorage.setItem('collab_disc_perm', state.permissionMode); } catch {}
   };
 
   $('btnImportFiles').onclick = pickAndAttachFiles;

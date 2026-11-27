@@ -17,8 +17,14 @@ import {
 import {
   readDiscussion, addAttachmentPaths, addUploadedAttachments, removeAttachment,
   clearDiscussion, appendDiscussionMessage, updateDiscussionMessage,
+  editDiscussionMessage, deleteDiscussionMessage, prepareRetryContext,
   buildDiscussionPrompt, finalizePlanToBrief
 } from './lib/discussion.mjs';
+import { createSnapshot, listSnapshots, restoreSnapshot } from './lib/snapshots.mjs';
+import {
+  scanDeliverables, resolvePreviewFile, runDeliverableScript,
+  stopDeliverableScript, stopAllDeliverableScripts, appendAcceptanceFeedback
+} from './lib/preview.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -104,6 +110,19 @@ function pickFilesDialog() {
   });
 }
 
+function collectExtraDirs(project, discussion = null) {
+  const dirs = [];
+  if (project?.parentDir) dirs.push(project.parentDir);
+  if (discussion && Array.isArray(discussion.attachments)) {
+    for (const att of discussion.attachments) {
+      if (att?.path && fs.existsSync(att.path)) {
+        dirs.push(path.dirname(path.resolve(att.path)));
+      }
+    }
+  }
+  return dirs;
+}
+
 const server = http.createServer((req, res) => {
   const language = req.headers['x-collab-language'];
   withLanguage(language, () => handleRequest(req, res));
@@ -120,8 +139,21 @@ function localizeStages() {
 
 async function handleRequest(req, res) {
   try {
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
     const url = new URL(req.url, `http://${req.headers.host || `${HOST}:${PORT}`}`);
     const p = url.pathname;
+    const address = server.address();
+    if (address.address === '127.0.0.1'
+      && (!['127.0.0.1', 'localhost'].includes(url.hostname)
+        || Number(url.port || 80) !== address.port)) {
+      return sendJson(res, 403, { error: 'Forbidden' });
+    }
+    const fetchSite = req.headers['sec-fetch-site'];
+    const origin = req.headers.origin;
+    if (p.startsWith('/api/')
+      && ((origin && origin !== url.origin) || (fetchSite && fetchSite !== 'same-origin'))) {
+      return sendJson(res, 403, { error: 'Forbidden' });
+    }
 
     if (p === '/api/health') return sendJson(res, 200, { ok: true, pid: process.pid });
 
@@ -136,9 +168,57 @@ async function handleRequest(req, res) {
 
     if (p === '/api/shutdown' && req.method === 'POST') {
       stopAllRuns();
+      stopAllDeliverableScripts();
       sendJson(res, 200, { ok: true });
       setTimeout(() => process.exit(0), 150);
       return;
+    }
+
+    if (p === '/api/open-url' && req.method === 'POST') {
+      const { targetUrl } = await readBody(req);
+      let previewUrl;
+      try { previewUrl = new URL(targetUrl); } catch {}
+      if (!previewUrl || !['http:', 'https:'].includes(previewUrl.protocol)
+        || !['127.0.0.1', 'localhost'].includes(previewUrl.hostname)
+        || previewUrl.username || previewUrl.password) {
+        return sendJson(res, 400, { error: t("仅允许打开本机预览地址") });
+      }
+      const cmd = process.platform === 'win32' ? 'rundll32.exe'
+        : process.platform === 'darwin' ? '/usr/bin/open' : 'xdg-open';
+      const args = process.platform === 'win32'
+        ? ['url.dll,FileProtocolHandler', previewUrl.href] : [previewUrl.href];
+      const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });
+      child.on('error', () => {});
+      child.unref();
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (p === '/api/deliverables' && req.method === 'GET') {
+      const dir = url.searchParams.get('dir');
+      if (!dir) return sendJson(res, 400, { error: t("缺少 dir 参数") });
+      const previewOrigin = new URL(url.origin);
+      previewOrigin.port = previewServer.address().port;
+      return sendJson(res, 200, scanDeliverables(dir, previewOrigin.origin));
+    }
+
+    if (p === '/api/deliverables/run-script' && req.method === 'POST') {
+      const { dir, scriptId } = await readBody(req);
+      if (!dir || !scriptId) return sendJson(res, 400, { error: t("缺少参数") });
+      const activeScript = runDeliverableScript({ dir, scriptId }, broadcastEvent);
+      return sendJson(res, 200, { activeScript });
+    }
+
+    if (p === '/api/deliverables/stop-script' && req.method === 'POST') {
+      const { dir } = await readBody(req);
+      if (!dir) return sendJson(res, 400, { error: t("缺少 dir 参数") });
+      return sendJson(res, 200, stopDeliverableScript(dir, broadcastEvent));
+    }
+
+    if (p === '/api/deliverables/feedback' && req.method === 'POST') {
+      const { dir, target, note } = await readBody(req);
+      if (!dir) return sendJson(res, 400, { error: t("缺少 dir 参数") });
+      const resData = appendAcceptanceFeedback({ dir, target, note });
+      return sendJson(res, 200, resData);
     }
 
     if (p === '/api/cli/status' && req.method === 'GET') {
@@ -162,10 +242,13 @@ async function handleRequest(req, res) {
     }
 
     if (p === '/api/cli/run' && req.method === 'POST') {
-      const { cli, dir, prompt, mode = 'inline', permissionMode = 'default', model = '', effort = '' } = await readBody(req);
+      const { cli, dir, prompt, mode = 'inline', permissionMode = 'auto', model = '', effort = '' } = await readBody(req);
+      const project = dir && fs.existsSync(dir) ? inspectScope(dir) : null;
+      const disc = dir && fs.existsSync(dir) ? readDiscussion(dir) : null;
+      const addDirs = collectExtraDirs(project, disc);
       const run = mode === 'terminal'
-        ? await launchExternalTerminal({ cli, dir, prompt, permissionMode, model, effort }, broadcastEvent)
-        : await startInlineRun({ cli, dir, prompt, permissionMode, model, effort }, broadcastEvent);
+        ? await launchExternalTerminal({ cli, dir, prompt, permissionMode, model, effort, addDirs }, broadcastEvent)
+        : await startInlineRun({ cli, dir, prompt, permissionMode, model, effort, addDirs }, broadcastEvent);
       return sendJson(res, 200, { run });
     }
 
@@ -215,13 +298,14 @@ async function handleRequest(req, res) {
     }
 
     if (p === '/api/discussion/send' && req.method === 'POST') {
-      const { dir, message, cli = 'antigravity', model = '', effort = '', permissionMode = 'default' } = await readBody(req);
+      const { dir, message, cli = 'antigravity', model = '', effort = '', permissionMode = 'auto' } = await readBody(req);
       if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: t("项目目录不存在") });
       const text = String(message || '').trim();
       if (!text) return sendJson(res, 400, { error: t("请先输入需求或讨论内容") });
 
       const project = inspectScope(dir);
       const beforeDisc = readDiscussion(dir);
+      const addDirs = collectExtraDirs(project, beforeDisc);
       const fullPrompt = buildDiscussionPrompt({
         dir,
         projectName: project.state.name,
@@ -257,6 +341,7 @@ async function handleRequest(req, res) {
           permissionMode,
           model,
           effort,
+          addDirs,
           kind: 'discussion',
           promptPreviewOverride: t("[讨论] {0}", text),
           onComplete: (finishedRun) => {
@@ -288,6 +373,121 @@ async function handleRequest(req, res) {
       if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: t("项目目录不存在") });
       const result = finalizePlanToBrief({ dir, planText, mode, advanceToStage });
       return sendJson(res, 200, result);
+    }
+
+    if (p === '/api/discussion/message' && req.method === 'PATCH') {
+      const { dir, msgId, content } = await readBody(req);
+      if (!dir || !msgId) return sendJson(res, 400, { error: t("缺少参数") });
+      const discussion = editDiscussionMessage(dir, msgId, content);
+      return sendJson(res, 200, { discussion });
+    }
+
+    if (p === '/api/discussion/message' && req.method === 'DELETE') {
+      const dir = url.searchParams.get('dir');
+      const id = url.searchParams.get('id');
+      if (!dir || !id) return sendJson(res, 400, { error: t("缺少参数") });
+      const discussion = deleteDiscussionMessage(dir, id);
+      return sendJson(res, 200, { discussion });
+    }
+
+    if (p === '/api/discussion/retry' && req.method === 'POST') {
+      const { dir, msgId, cli = 'antigravity', model = '', effort = '', permissionMode = 'auto' } = await readBody(req);
+      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: t("项目目录不存在") });
+      if (!msgId) return sendJson(res, 400, { error: t("缺少 msgId 参数") });
+
+      const project = inspectScope(dir);
+      const { discussionBefore, userMessage, replaceAssistantId } = prepareRetryContext(dir, msgId);
+      const addDirs = collectExtraDirs(project, discussionBefore);
+      const fullPrompt = buildDiscussionPrompt({
+        dir,
+        projectName: project.state.name,
+        userMessage,
+        discussion: discussionBefore,
+        parentDir: project.parentDir,
+        parentName: project.parentName
+      });
+
+      const cliLabel = CLI_PROFILES[cli]?.label || cli;
+      let assistantMsg;
+      if (replaceAssistantId) {
+        assistantMsg = updateDiscussionMessage(dir, replaceAssistantId, {
+          cli,
+          cliLabel,
+          model: String(model || '').trim(),
+          effort: String(effort || '').trim(),
+          pending: true,
+          status: 'running',
+          content: '',
+          runId: null,
+          retriedAt: new Date().toISOString()
+        });
+      } else {
+        assistantMsg = appendDiscussionMessage(dir, {
+          role: 'assistant',
+          cli,
+          cliLabel,
+          model: String(model || '').trim(),
+          effort: String(effort || '').trim(),
+          pending: true,
+          status: 'running',
+          content: ''
+        });
+      }
+
+      try {
+        const run = await startInlineRun({
+          cli,
+          dir,
+          prompt: fullPrompt,
+          permissionMode,
+          model,
+          effort,
+          addDirs,
+          kind: 'discussion',
+          promptPreviewOverride: t("[重试讨论] {0}", userMessage),
+          onComplete: (finishedRun) => {
+            updateDiscussionMessage(dir, assistantMsg.id, {
+              pending: false,
+              status: finishedRun.status,
+              exitCode: finishedRun.exitCode,
+              runId: finishedRun.id,
+              content: finishedRun.output?.trim() || t("(执行结束，无文本输出，exit={0})", finishedRun.exitCode)
+            });
+            broadcastEvent({ type: 'discussion:updated', dir: path.resolve(dir), msgId: assistantMsg.id, runId: finishedRun.id });
+          }
+        }, broadcastEvent);
+
+        updateDiscussionMessage(dir, assistantMsg.id, { runId: run.id });
+        return sendJson(res, 200, { discussion: readDiscussion(dir), assistantMsg: { ...assistantMsg, runId: run.id }, run });
+      } catch (err) {
+        updateDiscussionMessage(dir, assistantMsg.id, {
+          pending: false,
+          status: 'failed',
+          content: t("重试失败：{0}", err.message)
+        });
+        throw err;
+      }
+    }
+
+    if (p === '/api/snapshots' && req.method === 'GET') {
+      const dir = url.searchParams.get('dir');
+      if (!dir) return sendJson(res, 400, { error: t("缺少 dir 参数") });
+      return sendJson(res, 200, { snapshots: listSnapshots(dir) });
+    }
+
+    if (p === '/api/snapshots/create' && req.method === 'POST') {
+      const { dir, label } = await readBody(req);
+      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: t("项目目录不存在") });
+      const snapshot = createSnapshot(dir, { label: label || t("手动保存快照") });
+      return sendJson(res, 200, { snapshot, snapshots: listSnapshots(dir) });
+    }
+
+    if (p === '/api/snapshots/restore' && req.method === 'POST') {
+      const { dir, snapshotId } = await readBody(req);
+      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: t("项目目录不存在") });
+      if (!snapshotId) return sendJson(res, 400, { error: t("缺少 snapshotId 参数") });
+      const result = restoreSnapshot(dir, snapshotId);
+      return sendJson(res, 200, { ...result, snapshots: listSnapshots(dir) });
     }
 
     if (p === '/api/pick-folder' && req.method === 'POST') {
@@ -424,24 +624,57 @@ async function handleRequest(req, res) {
   }
 }
 
-server.on('close', stopAllRuns);
+// Deliverables can contain arbitrary project JavaScript. Serve them from
+// another origin with no access to the desktop API or its preload bridge.
+const previewServer = http.createServer((req, res) => {
+  const requestPath = new URL(req.url, 'http://localhost').pathname;
+  const [, mountId, relPath] = requestPath.match(/^\/preview\/([^/]+)\/(.*)$/) || [];
+  const resolved = ['GET', 'HEAD'].includes(req.method) && resolvePreviewFile(mountId, relPath);
+  if (!resolved) {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('Preview file not found');
+  }
+  res.writeHead(200, {
+    'Content-Type': resolved.mime,
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': 'sandbox allow-scripts allow-same-origin allow-forms allow-downloads'
+  });
+  if (req.method === 'HEAD') return res.end();
+  const stream = fs.createReadStream(resolved.full);
+  stream.on('error', () => res.destroy());
+  stream.pipe(res);
+});
 
 export function stopServer() {
   stopAllRuns();
+  stopAllDeliverableScripts();
   clearTimeout(shutdownTimer);
   for (const client of sseClients) client.end();
   server.close();
+  previewServer.close();
 }
 
-export function startServer(port = PORT, host = HOST) {
+function listen(listener, port, host) {
   return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(port, host, () => {
-      const addr = server.address();
-      const displayHost = host === '0.0.0.0' ? '127.0.0.1' : host;
-      resolve({ server, port: addr.port, host, url: `http://${displayHost}:${addr.port}` });
+    listener.once('error', reject);
+    listener.listen(port, host, () => {
+      listener.off('error', reject);
+      resolve(listener.address().port);
     });
   });
+}
+
+export async function startServer(port = PORT, host = HOST) {
+  await listen(previewServer, 0, host);
+  try {
+    const boundPort = await listen(server, port, host);
+    const displayHost = host === '0.0.0.0' ? '127.0.0.1' : host;
+    return { server, port: boundPort, host, url: `http://${displayHost}:${boundPort}` };
+  } catch (error) {
+    previewServer.close();
+    throw error;
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

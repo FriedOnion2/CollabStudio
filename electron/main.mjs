@@ -4,7 +4,7 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
 import { normalizeLanguage, translate } from '../public/translate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -115,6 +115,16 @@ ipcMain.handle('language:set', async (_event, next) => {
   language = selected;
   updateMenu();
 });
+
+ipcMain.handle('shell:openExternal', async (_event, targetUrl) => {
+  const u = String(targetUrl || '').trim();
+  if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(u)) {
+    throw new Error(t("仅允许在系统浏览器打开本机预览地址"));
+  }
+  await shell.openExternal(u);
+  return true;
+});
+
 
 ipcMain.handle('app:quit', () => app.quit());
 

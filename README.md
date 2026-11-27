@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.1-3b82f6?style=flat-square" alt="version" />
+  <img src="https://img.shields.io/badge/version-1.2.2-3b82f6?style=flat-square" alt="version" />
   <img src="https://img.shields.io/badge/runtime-Electron%20%7C%20Node.js%2018%2B-10b981?style=flat-square" alt="runtime" />
   <img src="https://img.shields.io/badge/dependencies-Zero%20Runtime%20Deps-f59e0b?style=flat-square" alt="zero-deps" />
   <img src="https://img.shields.io/badge/license-MIT-64748b?style=flat-square" alt="license" />
@@ -46,26 +46,32 @@
 - **中途自由切换模型接力**：讨论过程中可随时切换 `Antigravity` / `Claude` / `Codex`、具体模型与思考强度，带着完整讨论记录无缝让不同模型补充或复审。
 - **一键定稿进入生产**：点击「确认方案并进入生产」，预览/微调定稿内容后一键写入 `docs/01-brief.md`，自动勾选阶段 1 门禁并推进到指定生产阶段。
 
-### 3. 工具内直接调用三端 CLI（按需手动切换）
+### 3. 工具内直接调用三端 CLI（防卡权限 · 实时流式 · 手动纠错）
 - **自动探测本机 CLI**：自动发现本机 `Codex CLI`、`Claude Code CLI` 与 `Antigravity (agy) CLI`，并支持在「⚙ 配置」弹窗中自定义路径与默认附加参数（数据保存在独立用户目录，与 **CC Switch** 等环境切换工具完全隔离兼容）。
 - **随时手动切换执行端**：左侧口令框支持直接编辑与一键恢复模板；执行栏默认跟随当前阶段配置，也可随时点击手动改派给任意 CLI。
 - **双执行模式**：
   - **内置直跑（实时流式输出）**：直接在右侧「CLI 终端输出」面板通过 SSE 实时查看输出，提示词通过标准输入传递，运行时可查看活动、计时和 PID。支持停止和切换历史输出，结束后自动刷新项目文档与任务进度。
   - **外部终端（交互会话）**：在 macOS 的「终端」或 Windows Terminal（可回退到 PowerShell）中，进入所选项目目录并带入口令启动交互会话。
 - **3 档权限策略**：按需切换 `默认` / `自动写文件` / `跳过确认`。
+- **纠错与快照**：讨论消息支持编辑、删除和重试。CLI 运行失败后可以带着日志生成纠错指令，或恢复运行前的规则和文档快照。
 
 ### 4. 分阶段模型与思考强度管理
 - 为 1~5 每个阶段分别指定 **执行 CLI + 具体模型 + 思考强度（`默认 / low / medium / high / xhigh / max`）**。
 - 支持**阶段卡片内联速切**与**「⚙ 阶段模型矩阵」一屏统一配置**，并自动探测可用模型列表（亦支持手动输入自定义模型名）。
 - 切换阶段时左侧执行栏自动套用对应配置，并真实透传至各 CLI 原生参数：
 
-| CLI | 模型参数 | 思考 / 推理强度参数 | 自动写文件 / 跳过确认 |
+| CLI | 模型参数 | 思考 / 推理强度参数 | 自动放行 / 完全免确认 |
 | :--- | :--- | :--- | :--- |
 | **Codex CLI** | `-m <model>` | `-c model_reasoning_effort="<effort>"` | `--full-auto` / `--dangerously-bypass-approvals-and-sandbox` |
-| **Claude CLI** | `--model <model>` | `--effort <effort>` | `--permission-mode acceptEdits` / `--dangerously-skip-permissions` |
-| **Antigravity (`agy`)** | `--model <model>` | `--effort <effort>` | `--mode accept-edits` / `--dangerously-skip-permissions` |
+| **Claude CLI** | `--model <model>` | `--effort <effort>` | `--permission-mode auto` / `--dangerously-skip-permissions` |
+| **Antigravity (`agy`)** | `--model <model>` | `--effort <effort>` | `--mode auto` / `--dangerously-skip-permissions` |
 
-### 5. 内置多模型协作方法论
+### 5. 交付验收与实时预览
+- **自动扫描交付物与脚本**：自动发现项目内 `prototypes/**/*.html`、`dist/` 构建页面、`package.json` 脚本、`tools/serve.mjs` 及最近产出的文件。
+- **内置 HTTP 预览与多端视口**：交付物通过独立的本地端口提供预览，项目页面和资源使用同一预览地址。支持自适应、桌面、平板和手机视口，也可以在系统浏览器打开。
+- **验收闭环返工**：预览栏底部支持一键 **「📝 记验收单」**（追加至 `docs/05-review-log.md`）、**「🔧 发给模型返工」**（记入验收单并填入左侧返工指令）及 **「✓ 验收通过」**（勾选当前阶段门禁）。
+
+### 6. 内置多模型协作方法论
 - **独立双方案合并（Blind Draft）**：大规划时让 Gemini 与 Claude 各自只看原始需求独立出方案，核实后再合并，避免锚定偏差。
 - **界面文案与交互润色**：初版 UI 完成后一键发给 Gemini 去掉 AI 机械解释文案，改成说人话的产品表达。
 - **两级分级审查（≤ 2 轮防死循环）**：只有会导致算错钱、丢数据、越权、发错消息或发布事故且有明确复现路径的问题才算 Blocker 挡上线；其余作为 Suggestion 记录。
@@ -109,7 +115,7 @@
 
 ### macOS 桌面版
 
-从 [GitHub Releases](https://github.com/FriedOnion2/CollabStudio/releases) 选择对应的 ZIP。Apple 芯片选 `macos-arm64`，Intel 芯片选 `macos-x64`。解压后将 `CollabStudio.app` 移到「应用程序」并打开。桌面包自带 Electron，调用模型仍需安装并登录相应的 CLI。
+使用下方的构建命令生成 macOS ZIP。Apple 芯片选 `macos-arm64`，Intel 芯片选 `macos-x64`。解压后将 `CollabStudio.app` 移到「应用程序」并打开。桌面包自带 Electron，调用模型仍需安装并登录相应的 CLI。
 
 本地构建使用临时签名。macOS 如拦截下载的应用，可在核对 SHA-256 并确认来源后，前往「系统设置 → 隐私与安全性」查看「仍要打开」选项。Apple Developer ID 签名和公证需在发行时另外完成。
 
@@ -131,7 +137,7 @@ npm run build:mac -- arm64  # Apple 芯片
 npm run build:mac -- x64    # Intel
 ```
 
-构建生成 `dist/CollabStudio-v1.2.1-macos-<arch>.zip`，解压后获得 `CollabStudio.app`。桌面版从登录 shell、PATH 和常见安装目录探测 CLI。也可在「CLI 配置」里指定可执行文件完整路径。
+构建生成 `dist/CollabStudio-v1.2.2-macos-<arch>.zip`，解压后获得 `CollabStudio.app`。桌面版从登录 shell、PATH 和常见安装目录探测 CLI。也可在「CLI 配置」里指定可执行文件完整路径。
 
 ### 3. 打包 Windows 独立客户端（`CollabStudio.exe`）
 ```bash
