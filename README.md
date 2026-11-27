@@ -44,24 +44,27 @@
 - **中途自由切换模型接力**：讨论过程中可随时切换 `Antigravity` / `Claude` / `Codex`、具体模型与思考强度，带着完整讨论记录无缝让不同模型补充或复审。
 - **一键定稿进入生产**：点击「确认方案并进入生产」，预览/微调定稿内容后一键写入 `docs/01-brief.md`，自动勾选阶段 1 门禁并推进到指定生产阶段。
 
-### 3. 工具内直接调用三端 CLI（按需手动切换）
+### 3. 工具内直接调用三端 CLI（防卡权限 · 实时流式 · 手动纠错）
 - **自动探测本机 CLI**：自动发现本机 `Codex CLI`、`Claude Code CLI` 与 `Antigravity (agy) CLI`，并支持在「⚙ 配置」弹窗中自定义路径与默认附加参数（数据保存在独立用户目录，与 **CC Switch** 等环境切换工具完全隔离兼容）。
-- **随时手动切换执行端**：左侧口令框支持直接编辑与一键恢复模板；执行栏默认跟随当前阶段配置，也可随时点击手动改派给任意 CLI。
-- **双执行模式**：
-  - **内置直跑（实时流式输出）**：直接在右侧「CLI 终端输出」面板通过 SSE 实时查看输出，支持一键停止、历史多轮输出下拉对比，结束后自动刷新项目文档与任务进度。
-  - **外部终端（交互会话）**：一键在 Windows Terminal（自动回退 PowerShell）中定位到目标项目/子项目目录并带入口令启动交互式 TUI 会话。
-- **3 档权限策略**：按需切换 `默认` / `自动写文件` / `跳过确认`。
+- **实时可见进度与防卡权限**：
+  - `agy` 走 `--input-format stream-json --output-format stream-json` stdin 管道（彻底摆脱 Windows 32KB 命令行长度限制），三端均实时显示 **绿色呼吸灯、当前动作/工具调用、每秒跳动耗时与真实 PID**；
+  - 内置直跑默认采用 **`auto` 自动放行权限**，并自动为主项目目录及导入的外部附件目录追加 `--add-dir`，大幅减少管道模式卡审批；若仍触发权限拦截可一键 **「🔓 免确认重试」**。
+- **全流程手动纠错与快照回退**：
+  - 讨论区每条消息均支持 **原地重试（可换模型/强度）、手动编辑、单条删除**；
+  - CLI 终端输出支持 **一键重试、一键带报错日志填入纠错指令**；
+  - 每次内置 CLI 运行前自动为 `docs/01~05`、规则文件与 `.collab-state.json` 生成轻量快照，支持在终端或文档栏 **一键回退快照**（回退前亦自动留存安全备份）。
+- **双执行模式**：支持 **内置直跑（SSE 实时流式输出）** 与 **外部终端（Windows Terminal 交互会话）** 随时切换。
 
 ### 4. 分阶段模型与思考强度管理
 - 为 1~5 每个阶段分别指定 **执行 CLI + 具体模型 + 思考强度（`默认 / low / medium / high / xhigh / max`）**。
 - 支持**阶段卡片内联速切**与**「⚙ 阶段模型矩阵」一屏统一配置**，并自动探测可用模型列表（亦支持手动输入自定义模型名）。
 - 切换阶段时左侧执行栏自动套用对应配置，并真实透传至各 CLI 原生参数：
 
-| CLI | 模型参数 | 思考 / 推理强度参数 | 自动写文件 / 跳过确认 |
+| CLI | 模型参数 | 思考 / 推理强度参数 | 自动放行 / 完全免确认 |
 | :--- | :--- | :--- | :--- |
 | **Codex CLI** | `-m <model>` | `-c model_reasoning_effort="<effort>"` | `--full-auto` / `--dangerously-bypass-approvals-and-sandbox` |
-| **Claude CLI** | `--model <model>` | `--effort <effort>` | `--permission-mode acceptEdits` / `--dangerously-skip-permissions` |
-| **Antigravity (`agy`)** | `--model <model>` | `--effort <effort>` | `--mode accept-edits` / `--dangerously-skip-permissions` |
+| **Claude CLI** | `--model <model>` | `--effort <effort>` | `--permission-mode auto` / `--dangerously-skip-permissions` |
+| **Antigravity (`agy`)** | `--model <model>` | `--effort <effort>` | `--mode auto` / `--dangerously-skip-permissions` |
 
 ### 5. 内置多模型协作方法论
 - **独立双方案合并（Blind Draft）**：大规划时让 Gemini 与 Claude 各自只看原始需求独立出方案，核实后再合并，避免锚定偏差。

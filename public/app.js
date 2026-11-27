@@ -97,6 +97,16 @@ const cliPanel = createCliPanel({
     const stageNum = String(state.detail?.project?.state?.stage || 1);
     await patchState({ stageRouting: { [stageNum]: route } });
     showToast(`已保存为阶段 ${stageNum} 默认模型与思考强度`);
+  },
+  onFillFixPrompt: (fixText) => {
+    const box = $('promptBox');
+    box.value = fixText;
+    $('btnResetPrompt').classList.remove('hidden');
+    box.focus();
+    box.scrollTop = 0;
+  },
+  onSnapshotRestored: () => {
+    refreshActive(false);
   }
 });
 
@@ -826,6 +836,64 @@ $('milestoneSelect').onchange = async (e) => {
 $('btnCopyPrompt').onclick = async () => {
   await navigator.clipboard.writeText($('promptBox').value);
   showToast('口令已复制到剪贴板');
+};
+
+async function renderSnapshotsModal() {
+  if (!state.activeDir) return;
+  const list = $('snapList');
+  list.innerHTML = '<div class="muted">加载快照列表中…</div>';
+  try {
+    const { snapshots } = await api(`/api/snapshots?dir=${encodeURIComponent(state.activeDir)}`);
+    list.innerHTML = '';
+    if (!snapshots.length) {
+      list.innerHTML = '<div class="muted">暂无快照（每次内置运行 CLI 前都会自动创建，也可以在上方手动新建）</div>';
+      return;
+    }
+    for (const s of snapshots) {
+      const row = document.createElement('div');
+      row.className = 'snap-item';
+      const t = s.createdAt ? new Date(s.createdAt).toLocaleString() : '';
+      row.innerHTML = `
+        <div class="snap-info">
+          <div class="snap-title" title="${esc(s.label)}">${esc(s.label)}</div>
+          <div class="snap-sub">${esc(t)} · ${s.fileCount} 个文件${s.cli ? ` · ${esc(s.cli)}` : ''}</div>
+        </div>
+        <button type="button" class="btn btn-sm act-restore">↶ 回退到此快照</button>`;
+      row.querySelector('.act-restore').onclick = async () => {
+        if (!confirm(`确定恢复到快照「${s.label}」吗？（系统会先自动备份当前文档状态）`)) return;
+        const res = await api('/api/snapshots/restore', {
+          method: 'POST',
+          body: JSON.stringify({ dir: state.activeDir, snapshotId: s.id })
+        });
+        showToast(`已回退 ${res.restoredFiles?.length || 0} 个文件`);
+        await Promise.all([refreshActive(false), renderSnapshotsModal()]);
+      };
+      list.appendChild(row);
+    }
+  } catch (e) {
+    list.innerHTML = `<div class="muted">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+$('btnOpenSnapshots').onclick = () => {
+  if (!state.activeDir) return;
+  $('inputSnapLabel').value = '';
+  $('snapModalBackdrop').classList.remove('hidden');
+  renderSnapshotsModal();
+};
+$('btnCloseSnapModal').onclick = () => $('snapModalBackdrop').classList.add('hidden');
+$('btnDoneSnapModal').onclick = () => $('snapModalBackdrop').classList.add('hidden');
+$('btnCreateSnap').onclick = async () => {
+  if (!state.activeDir) return;
+  try {
+    await api('/api/snapshots/create', {
+      method: 'POST',
+      body: JSON.stringify({ dir: state.activeDir, label: $('inputSnapLabel').value.trim() || '手动保存快照' })
+    });
+    $('inputSnapLabel').value = '';
+    showToast('已创建文档快照');
+    await renderSnapshotsModal();
+  } catch (e) { showToast(e.message); }
 };
 
 connectEvents();

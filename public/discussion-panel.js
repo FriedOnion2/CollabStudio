@@ -11,6 +11,9 @@ function fmtSize(bytes = 0) {
 }
 
 export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
+  const savedDiscPerm = (() => {
+    try { return localStorage.getItem('collab_disc_perm') || 'auto'; } catch { return 'auto'; }
+  })();
   const state = {
     dir: null,
     clis: [],
@@ -18,13 +21,17 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
     cli: 'antigravity',
     model: '',
     effort: 'high',
+    permissionMode: ['default', 'auto', 'bypass'].includes(savedDiscPerm) ? savedDiscPerm : 'auto',
     discussion: { planLocked: false, attachments: [], messages: [] },
     activeRunId: null,
     streamingMsgId: null,
+    editingMsgId: null,
     liveActivity: '',
     livePid: null,
-    liveStartedAt: null
+    liveStartedAt: null,
+    liveNeedsPerm: false
   };
+  if ($('discPermSelect')) $('discPermSelect').value = state.permissionMode;
 
   function fmtElapsed(startedAt) {
     if (!startedAt) return '00:00';
@@ -115,36 +122,81 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
       card.className = `disc-msg ${m.role === 'user' ? 'user' : 'assistant'}`;
       const timeStr = m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
+      const isEditing = state.editingMsgId === m.id;
+
       if (m.role === 'user') {
         const attNote = m.attachmentNames?.length ? ` · 附带 ${m.attachmentNames.length} 个文件` : '';
         card.innerHTML = `
           <div class="disc-msg-head"><span>你${esc(attNote)}</span><span class="muted">${timeStr}</span></div>
-          <div class="disc-msg-body">${esc(m.content)}</div>`;
+          ${isEditing
+            ? `<textarea class="disc-edit-area">${esc(m.content)}</textarea>
+               <div class="disc-msg-actions">
+                 <button type="button" class="btn-link act-edit-cancel">取消</button>
+                 <button type="button" class="btn-link act-prod act-edit-save">保存修改</button>
+               </div>`
+            : `<div class="disc-msg-body">${esc(m.content)}</div>
+               <div class="disc-msg-actions">
+                 <button type="button" class="btn-link act-retry" title="用当前选中的模型重新回复这条需求">↻ 重跑本条</button>
+                 <button type="button" class="btn-link act-edit">✎ 编辑</button>
+                 <button type="button" class="btn-link act-del">🗑 删除</button>
+               </div>`}`;
+        if (isEditing) {
+          card.querySelector('.act-edit-cancel').onclick = () => { state.editingMsgId = null; renderMessages(false); };
+          card.querySelector('.act-edit-save').onclick = () => saveEditedMessage(m.id, card.querySelector('.disc-edit-area').value);
+        } else {
+          card.querySelector('.act-retry').onclick = () => retryMessage(m.id, false);
+          card.querySelector('.act-edit').onclick = () => { state.editingMsgId = m.id; renderMessages(false); };
+          card.querySelector('.act-del').onclick = () => deleteMessage(m.id);
+        }
       } else {
         const metaTags = [m.cliLabel || m.cli || '模型', m.model, m.effort ? `思考:${m.effort}` : ''].filter(Boolean).join(' · ');
         const isLive = Boolean(m.pending);
+        const isFailed = m.status === 'failed' || m.status === 'stopped';
         const liveText = isLive
           ? `${state.liveActivity || '正在连接 CLI 思考…'} · ${fmtElapsed(state.liveStartedAt || m.createdAt)}${state.livePid ? ` · PID ${state.livePid}` : ''}`
           : '';
         const pendingTag = isLive
           ? `<span class="disc-thinking"><span class="live-pulse"></span><span class="disc-live-label">${esc(liveText)}</span></span>`
-          : (m.status === 'failed' ? '<span class="disc-failed-tag">失败</span>' : '');
+          : (m.status === 'failed' ? '<span class="disc-failed-tag">失败</span>' : (m.status === 'stopped' ? '<span class="disc-failed-tag">已终止</span>' : ''));
         card.innerHTML = `
           <div class="disc-msg-head">
             <span class="disc-model-tag tag-${esc(m.cli || 'codex')}">${esc(metaTags)}</span>
             <div class="inline-actions">${pendingTag}<span class="muted">${timeStr}</span></div>
           </div>
-          <div class="disc-msg-body">${esc(m.content || (isLive ? 'CLI 已启动并正在工作，模型开始吐字后会实时显示在这里…' : ''))}</div>
-          ${isLive
-            ? `<div class="disc-msg-actions"><button type="button" class="btn-link act-stop" style="color:var(--danger)">■ 停止本轮</button></div>`
-            : `<div class="disc-msg-actions">
-            <button type="button" class="btn-link act-copy">复制</button>
-            <button type="button" class="btn-link act-brief">仅写入 01-brief</button>
-            <button type="button" class="btn-link act-prod">采纳并进入生产 →</button>
-          </div>`}`;
-        if (isLive) {
+          ${isEditing
+            ? `<textarea class="disc-edit-area">${esc(m.content || '')}</textarea>
+               <div class="disc-msg-actions">
+                 <button type="button" class="btn-link act-edit-cancel">取消</button>
+                 <button type="button" class="btn-link act-prod act-edit-save">保存手动纠错</button>
+               </div>`
+            : `<div class="disc-msg-body">${esc(m.content || (isLive ? 'CLI 已启动并正在工作，模型开始吐字后会实时显示在这里…' : ''))}</div>
+               ${isLive
+                 ? `<div class="disc-msg-actions">
+                      ${state.liveNeedsPerm ? '<button type="button" class="btn-link act-warn act-bypass-live">🔓 停止并免确认重试</button>' : ''}
+                      <button type="button" class="btn-link act-stop" style="color:var(--danger)">■ 停止本轮</button>
+                    </div>`
+                 : `<div class="disc-msg-actions">
+                      <button type="button" class="btn-link act-retry" title="用当前顶部选中的模型/思考强度原地重试本轮">↻ 重试</button>
+                      ${isFailed ? '<button type="button" class="btn-link act-warn act-bypass-retry">🔓 免确认重试</button>' : ''}
+                      <button type="button" class="btn-link act-edit">✎ 编辑</button>
+                      <button type="button" class="btn-link act-del">🗑 删除</button>
+                      <button type="button" class="btn-link act-copy">复制</button>
+                      <button type="button" class="btn-link act-brief">仅写入 01-brief</button>
+                      <button type="button" class="btn-link act-prod">采纳并进入生产 →</button>
+                    </div>`}`}`;
+        if (isEditing) {
+          card.querySelector('.act-edit-cancel').onclick = () => { state.editingMsgId = null; renderMessages(false); };
+          card.querySelector('.act-edit-save').onclick = () => saveEditedMessage(m.id, card.querySelector('.disc-edit-area').value);
+        } else if (isLive) {
           card.querySelector('.act-stop').onclick = stopDiscussionRun;
+          const bLive = card.querySelector('.act-bypass-live');
+          if (bLive) bLive.onclick = async () => { await stopDiscussionRun(); await retryMessage(m.id, true); };
         } else {
+          card.querySelector('.act-retry').onclick = () => retryMessage(m.id, false);
+          const bRetry = card.querySelector('.act-bypass-retry');
+          if (bRetry) bRetry.onclick = () => retryMessage(m.id, true);
+          card.querySelector('.act-edit').onclick = () => { state.editingMsgId = m.id; renderMessages(false); };
+          card.querySelector('.act-del').onclick = () => deleteMessage(m.id);
           card.querySelector('.act-copy').onclick = async () => {
             await navigator.clipboard.writeText(m.content || '');
             showToast('已复制方案回复');
@@ -266,7 +318,8 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
           message,
           cli: state.cli,
           model: state.model,
-          effort: state.effort
+          effort: state.effort,
+          permissionMode: state.permissionMode
         })
       });
       state.discussion = res.discussion;
@@ -275,9 +328,79 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
       state.liveActivity = res.run.activity || '进程已启动，等待 CLI 响应…';
       state.livePid = res.run.pid || null;
       state.liveStartedAt = res.run.startedAt || new Date().toISOString();
+      state.liveNeedsPerm = false;
       renderMessages(true);
     } catch (e) {
       input.value = message;
+      showToast(e.message);
+      if (state.dir) load(state.dir);
+    }
+  }
+
+  async function saveEditedMessage(msgId, content) {
+    const dir = getActiveDir();
+    if (!dir) return;
+    try {
+      const data = await api('/api/discussion/message', {
+        method: 'PATCH',
+        body: JSON.stringify({ dir, msgId, content })
+      });
+      state.discussion = data.discussion;
+      state.editingMsgId = null;
+      renderMessages(false);
+      showToast('已保存手动修改');
+    } catch (e) {
+      showToast(e.message);
+    }
+  }
+
+  async function deleteMessage(msgId) {
+    const dir = getActiveDir();
+    if (!dir || !confirm('确定删除这条消息吗？')) return;
+    try {
+      const data = await api(`/api/discussion/message?dir=${encodeURIComponent(dir)}&id=${encodeURIComponent(msgId)}`, {
+        method: 'DELETE'
+      });
+      state.discussion = data.discussion;
+      if (state.editingMsgId === msgId) state.editingMsgId = null;
+      renderMessages(false);
+      showToast('已删除该条消息');
+    } catch (e) {
+      showToast(e.message);
+    }
+  }
+
+  async function retryMessage(msgId, forceBypass = false) {
+    const dir = getActiveDir();
+    if (!dir) return;
+    if (state.activeRunId) return showToast('当前仍有模型在回复中，请先停止后再重试');
+    if (forceBypass) {
+      state.permissionMode = 'bypass';
+      if ($('discPermSelect')) $('discPermSelect').value = 'bypass';
+      try { localStorage.setItem('collab_disc_perm', 'bypass'); } catch {}
+    }
+    try {
+      const res = await api('/api/discussion/retry', {
+        method: 'POST',
+        body: JSON.stringify({
+          dir,
+          msgId,
+          cli: state.cli,
+          model: state.model,
+          effort: state.effort,
+          permissionMode: forceBypass ? 'bypass' : state.permissionMode
+        })
+      });
+      state.discussion = res.discussion;
+      state.activeRunId = res.run.id;
+      state.streamingMsgId = res.assistantMsg.id;
+      state.liveActivity = res.run.activity || '正在重试…';
+      state.livePid = res.run.pid || null;
+      state.liveStartedAt = res.run.startedAt || new Date().toISOString();
+      state.liveNeedsPerm = false;
+      renderMessages(false);
+      showToast(`正在使用 ${res.run.cliLabel} 重试本轮`);
+    } catch (e) {
       showToast(e.message);
       if (state.dir) load(state.dir);
     }
@@ -336,9 +459,14 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
     if (evt.type === 'cli:activity' && evt.runId && evt.runId === state.activeRunId) {
       state.liveActivity = evt.activity || state.liveActivity;
       if (evt.pid) state.livePid = evt.pid;
-      const lbl = document.querySelector('.disc-live-label');
-      if (lbl) {
-        lbl.textContent = `${state.liveActivity} · ${fmtElapsed(state.liveStartedAt)}${state.livePid ? ` · PID ${state.livePid}` : ''}`;
+      if (evt.needsPermission && !state.liveNeedsPerm) {
+        state.liveNeedsPerm = true;
+        renderMessages(false);
+      } else {
+        const lbl = document.querySelector('.disc-live-label');
+        if (lbl) {
+          lbl.textContent = `${state.liveActivity} · ${fmtElapsed(state.liveStartedAt)}${state.livePid ? ` · PID ${state.livePid}` : ''}`;
+        }
       }
       return;
     }
@@ -390,6 +518,11 @@ export function createDiscussionPanel({ getActiveDir, onPlanFinalized }) {
 
   $('discEffortSelect').onchange = (e) => {
     state.effort = e.target.value;
+  };
+
+  $('discPermSelect').onchange = (e) => {
+    state.permissionMode = e.target.value;
+    try { localStorage.setItem('collab_disc_perm', state.permissionMode); } catch {}
   };
 
   $('btnImportFiles').onclick = pickAndAttachFiles;

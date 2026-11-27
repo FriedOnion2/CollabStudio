@@ -127,10 +127,10 @@
                   <option value="inline">内置直跑（实时输出）</option>
                   <option value="terminal">外部终端（交互会话）</option>
                 </select>
-                <select id="cliPermSelect" class="select-sm" title="CLI 工具权限策略">
-                  <option value="default">权限：默认</option>
-                  <option value="auto">权限：自动写文件</option>
-                  <option value="bypass">权限：跳过确认</option>
+                <select id="cliPermSelect" class="select-sm" title="CLI 工具权限策略（推荐自动放行或免确认以防卡审批）">
+                  <option value="auto" selected>权限：自动放行（推荐）</option>
+                  <option value="bypass">权限：完全免确认（防卡死）</option>
+                  <option value="default">权限：严格默认</option>
                 </select>
                 <button id="btnRunCli" class="btn btn-primary btn-sm" type="button">▶ 运行</button>
               </div>
@@ -163,12 +163,17 @@
               </div>
               <div id="docsHeaderActions" class="inline-actions hidden">
                 <span id="docStatus" class="muted">已同步</span>
+                <button id="btnOpenSnapshots" class="btn btn-sm" type="button" title="查看运行前自动快照或手动创建/回退">⏱ 快照</button>
                 <button id="btnSaveDoc" class="btn btn-primary btn-sm">保存文档</button>
               </div>
               <div id="cliHeaderActions" class="inline-actions hidden">
                 <span id="cliRunStatus" class="cli-status-pill">空闲</span>
                 <button id="btnStopCli" class="btn btn-danger btn-sm hidden" type="button">■ 停止</button>
-                <button id="btnCopyCliOutput" class="btn btn-sm" type="button">复制输出</button>
+                <button id="btnBypassRetryCli" class="btn btn-amber btn-sm hidden" type="button" title="切换完全免确认权限并立即重跑本次任务">🔓 免确认重试</button>
+                <button id="btnRetryCli" class="btn btn-sm hidden" type="button" title="用当前左侧选中的 CLI/模型/强度重跑">↻ 重试</button>
+                <button id="btnFixCli" class="btn btn-sm hidden" type="button" title="自动带上本次报错日志填入指令框以便纠错">🔧 纠错</button>
+                <button id="btnRollbackRun" class="btn btn-sm hidden" type="button" title="一键恢复到本次 CLI 运行前的文档快照">↶ 回退</button>
+                <button id="btnCopyCliOutput" class="btn btn-sm" type="button">复制</button>
               </div>
             </div>
 
@@ -178,6 +183,11 @@
                 <div id="discCliSwitch" class="cli-target-switch"></div>
                 <select id="discModelSelect" class="select-sm disc-model-sel" title="讨论使用的具体模型"></select>
                 <select id="discEffortSelect" class="select-sm select-effort" title="讨论思考强度"></select>
+                <select id="discPermSelect" class="select-sm select-perm-mini" title="讨论期 CLI 权限（自动放行外部附件目录读取，防卡审批）">
+                  <option value="auto" selected>自动放行</option>
+                  <option value="bypass">完全免确认</option>
+                  <option value="default">严格默认</option>
+                </select>
               </div>
               <div id="discAttachList" class="disc-attach-bar"></div>
               <div id="discThread" class="disc-thread"></div>
@@ -360,6 +370,24 @@
           <button id="btnCancelSubModal2" class="btn" type="button">取消</button>
           <button id="btnConfirmSubScan" class="btn btn-primary" type="button">批量导入选中子项目</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="snapModalBackdrop" class="modal-backdrop hidden">
+    <div class="modal modal-wide">
+      <div class="modal-head">
+        <h3>文档快照与一键回退</h3>
+        <button id="btnCloseSnapModal" class="btn-link">✕</button>
+      </div>
+      <div class="muted">每次内置 CLI 开跑前都会自动备份 <code>docs/01~05</code>、规则文件与 <code>.collab-state.json</code>；回退前也会再自动留一份安全备份，放心操作。</div>
+      <div class="input-row">
+        <input id="inputSnapLabel" type="text" placeholder="可选：输入手动快照备注，例如「阶段2定稿前」" />
+        <button id="btnCreateSnap" class="btn btn-primary btn-sm" type="button">+ 新建快照</button>
+      </div>
+      <div id="snapList" class="sub-scan-list"></div>
+      <div class="modal-actions">
+        <button id="btnDoneSnapModal" class="btn" type="button">关闭</button>
       </div>
     </div>
   </div>

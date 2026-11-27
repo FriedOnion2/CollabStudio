@@ -16,8 +16,10 @@ import {
 import {
   readDiscussion, addAttachmentPaths, addUploadedAttachments, removeAttachment,
   clearDiscussion, appendDiscussionMessage, updateDiscussionMessage,
+  editDiscussionMessage, deleteDiscussionMessage, prepareRetryContext,
   buildDiscussionPrompt, finalizePlanToBrief
 } from './lib/discussion.mjs';
+import { createSnapshot, listSnapshots, restoreSnapshot } from './lib/snapshots.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -103,6 +105,19 @@ function pickFilesDialog() {
   });
 }
 
+function collectExtraDirs(project, discussion = null) {
+  const dirs = [];
+  if (project?.parentDir) dirs.push(project.parentDir);
+  if (discussion && Array.isArray(discussion.attachments)) {
+    for (const att of discussion.attachments) {
+      if (att?.path && fs.existsSync(att.path)) {
+        dirs.push(path.dirname(path.resolve(att.path)));
+      }
+    }
+  }
+  return dirs;
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host || `${HOST}:${PORT}`}`);
@@ -147,10 +162,13 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (p === '/api/cli/run' && req.method === 'POST') {
-      const { cli, dir, prompt, mode = 'inline', permissionMode = 'default', model = '', effort = '' } = await readBody(req);
+      const { cli, dir, prompt, mode = 'inline', permissionMode = 'auto', model = '', effort = '' } = await readBody(req);
+      const project = dir && fs.existsSync(dir) ? inspectScope(dir) : null;
+      const disc = dir && fs.existsSync(dir) ? readDiscussion(dir) : null;
+      const addDirs = collectExtraDirs(project, disc);
       const run = mode === 'terminal'
-        ? await launchExternalTerminal({ cli, dir, prompt, permissionMode, model, effort }, broadcastEvent)
-        : await startInlineRun({ cli, dir, prompt, permissionMode, model, effort }, broadcastEvent);
+        ? await launchExternalTerminal({ cli, dir, prompt, permissionMode, model, effort, addDirs }, broadcastEvent)
+        : await startInlineRun({ cli, dir, prompt, permissionMode, model, effort, addDirs }, broadcastEvent);
       return sendJson(res, 200, { run });
     }
 
@@ -197,13 +215,14 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (p === '/api/discussion/send' && req.method === 'POST') {
-      const { dir, message, cli = 'antigravity', model = '', effort = '', permissionMode = 'default' } = await readBody(req);
+      const { dir, message, cli = 'antigravity', model = '', effort = '', permissionMode = 'auto' } = await readBody(req);
       if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: '项目目录不存在' });
       const text = String(message || '').trim();
       if (!text) return sendJson(res, 400, { error: '请先输入需求或讨论内容' });
 
       const project = inspectScope(dir);
       const beforeDisc = readDiscussion(dir);
+      const addDirs = collectExtraDirs(project, beforeDisc);
       const fullPrompt = buildDiscussionPrompt({
         dir,
         projectName: project.state.name,
@@ -239,6 +258,7 @@ const server = http.createServer(async (req, res) => {
           permissionMode,
           model,
           effort,
+          addDirs,
           kind: 'discussion',
           promptPreviewOverride: `[讨论] ${text}`,
           onComplete: (finishedRun) => {
@@ -270,6 +290,120 @@ const server = http.createServer(async (req, res) => {
       if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: '项目目录不存在' });
       const result = finalizePlanToBrief({ dir, planText, mode, advanceToStage });
       return sendJson(res, 200, result);
+    }
+
+    if (p === '/api/discussion/message' && req.method === 'PATCH') {
+      const { dir, msgId, content } = await readBody(req);
+      if (!dir || !msgId) return sendJson(res, 400, { error: '缺少参数' });
+      const discussion = editDiscussionMessage(dir, msgId, content);
+      return sendJson(res, 200, { discussion });
+    }
+
+    if (p === '/api/discussion/message' && req.method === 'DELETE') {
+      const dir = url.searchParams.get('dir');
+      const id = url.searchParams.get('id');
+      if (!dir || !id) return sendJson(res, 400, { error: '缺少参数' });
+      const discussion = deleteDiscussionMessage(dir, id);
+      return sendJson(res, 200, { discussion });
+    }
+
+    if (p === '/api/discussion/retry' && req.method === 'POST') {
+      const { dir, msgId, cli = 'antigravity', model = '', effort = '', permissionMode = 'auto' } = await readBody(req);
+      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: '项目目录不存在' });
+      if (!msgId) return sendJson(res, 400, { error: '缺少 msgId 参数' });
+
+      const project = inspectScope(dir);
+      const { discussionBefore, userMessage, replaceAssistantId } = prepareRetryContext(dir, msgId);
+      const addDirs = collectExtraDirs(project, discussionBefore);
+      const fullPrompt = buildDiscussionPrompt({
+        dir,
+        projectName: project.state.name,
+        userMessage,
+        discussion: discussionBefore,
+        parentDir: project.parentDir,
+        parentName: project.parentName
+      });
+
+      const cliLabel = CLI_PROFILES[cli]?.label || cli;
+      let assistantMsg;
+      if (replaceAssistantId) {
+        assistantMsg = updateDiscussionMessage(dir, replaceAssistantId, {
+          cli,
+          cliLabel,
+          model: String(model || '').trim(),
+          effort: String(effort || '').trim(),
+          pending: true,
+          status: 'running',
+          content: '',
+          retriedAt: new Date().toISOString()
+        });
+      } else {
+        assistantMsg = appendDiscussionMessage(dir, {
+          role: 'assistant',
+          cli,
+          cliLabel,
+          model: String(model || '').trim(),
+          effort: String(effort || '').trim(),
+          pending: true,
+          status: 'running',
+          content: ''
+        });
+      }
+
+      try {
+        const run = await startInlineRun({
+          cli,
+          dir,
+          prompt: fullPrompt,
+          permissionMode,
+          model,
+          effort,
+          addDirs,
+          kind: 'discussion',
+          promptPreviewOverride: `[重试讨论] ${userMessage}`,
+          onComplete: (finishedRun) => {
+            updateDiscussionMessage(dir, assistantMsg.id, {
+              pending: false,
+              status: finishedRun.status,
+              exitCode: finishedRun.exitCode,
+              runId: finishedRun.id,
+              content: finishedRun.output?.trim() || `(执行结束，无文本输出，exit=${finishedRun.exitCode})`
+            });
+            broadcastEvent({ type: 'discussion:updated', dir: path.resolve(dir), msgId: assistantMsg.id, runId: finishedRun.id });
+          }
+        }, broadcastEvent);
+
+        updateDiscussionMessage(dir, assistantMsg.id, { runId: run.id });
+        return sendJson(res, 200, { discussion: readDiscussion(dir), assistantMsg: { ...assistantMsg, runId: run.id }, run });
+      } catch (err) {
+        updateDiscussionMessage(dir, assistantMsg.id, {
+          pending: false,
+          status: 'failed',
+          content: `重试失败：${err.message}`
+        });
+        throw err;
+      }
+    }
+
+    if (p === '/api/snapshots' && req.method === 'GET') {
+      const dir = url.searchParams.get('dir');
+      if (!dir) return sendJson(res, 400, { error: '缺少 dir 参数' });
+      return sendJson(res, 200, { snapshots: listSnapshots(dir) });
+    }
+
+    if (p === '/api/snapshots/create' && req.method === 'POST') {
+      const { dir, label } = await readBody(req);
+      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: '项目目录不存在' });
+      const snapshot = createSnapshot(dir, { label: label || '手动保存快照' });
+      return sendJson(res, 200, { snapshot, snapshots: listSnapshots(dir) });
+    }
+
+    if (p === '/api/snapshots/restore' && req.method === 'POST') {
+      const { dir, snapshotId } = await readBody(req);
+      if (!dir || !fs.existsSync(dir)) return sendJson(res, 404, { error: '项目目录不存在' });
+      if (!snapshotId) return sendJson(res, 400, { error: '缺少 snapshotId 参数' });
+      const result = restoreSnapshot(dir, snapshotId);
+      return sendJson(res, 200, { ...result, snapshots: listSnapshots(dir) });
     }
 
     if (p === '/api/pick-folder' && req.method === 'POST') {
