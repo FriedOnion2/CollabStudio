@@ -334,3 +334,16 @@ code, .mono-path, .doc-editor, .prompt-box { font-family: "Cascadia Code", "JetB
 }
 
 .language-select { align-self: flex-start; }
+
+.archived-section { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); display: flex; flex-direction: column; gap: 6px; }
+.archived-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; background: none; border: none; color: var(--muted); font-size: 11.5px; cursor: pointer; padding: 3px 4px; text-align: left; }
+.archived-toggle:hover { color: var(--text); }
+.proj-group.is-archived { opacity: .72; }
+.proj-group.is-archived:hover, .proj-group.is-archived .proj-root-row.active { opacity: 1; }
+.stage-pill.archived-pill { background: #262c3a; color: var(--muted); }
+
+.btn-danger { background: #7f1d1d; border-color: #b91c1c; color: #fee2e2; font-weight: 600; }
+.btn-danger:hover:not(:disabled) { background: #991b1b; }
+.btn-danger:disabled { opacity: .45; cursor: not-allowed; }
+.delete-option-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; }
+.delete-danger-box { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: #1e1215; border: 1px solid #6b2929; border-radius: 8px; font-size: 12.5px; color: #fecaca; }

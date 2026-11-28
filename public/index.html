@@ -66,7 +66,8 @@
             <button id="btnRefresh" class="btn btn-sm" data-i18n>刷新磁盘</button>
             <button id="btnOpenFolder" class="btn btn-sm" data-i18n>打开目录</button>
             <button id="btnToggleFreeze" class="btn btn-amber btn-sm" data-i18n>冻结接口契约</button>
-            <button id="btnRemoveProj" class="btn btn-danger-ghost btn-sm" title="仅从列表移除，不删文件" data-i18n data-i18n-attrs="title">移除</button>
+            <button id="btnArchiveProj" class="btn btn-sm" title="归档或恢复该项目（不删本地文件）" data-i18n data-i18n-attrs="title">归档</button>
+            <button id="btnRemoveProj" class="btn btn-danger-ghost btn-sm" title="移除或删除该项目" data-i18n data-i18n-attrs="title">删除</button>
           </div>
         </header>
 
@@ -442,6 +443,42 @@
       <div id="snapList" class="sub-scan-list"></div>
       <div class="modal-actions">
         <button id="btnDoneSnapModal" class="btn" type="button" data-i18n>关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="deleteProjBackdrop" class="modal-backdrop hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 data-i18n>管理 / 删除项目</h3>
+        <button id="btnCloseDeleteModal" class="btn-link" type="button">✕</button>
+      </div>
+      <div class="muted" id="deleteProjTarget"></div>
+      <div class="delete-option-row">
+        <div>
+          <strong data-i18n>📦 归档项目</strong>
+          <div class="muted" data-i18n>折叠到侧边栏「已归档项目」，保留记录与本地文件，随时可恢复。</div>
+        </div>
+        <button id="btnDeleteModalArchive" class="btn btn-sm" type="button" data-i18n>归档</button>
+      </div>
+      <div class="delete-option-row">
+        <div>
+          <strong data-i18n>📋 仅从工作台移除</strong>
+          <div class="muted" data-i18n>从 CollabStudio 列表移除，本地磁盘文件夹完好保留。</div>
+        </div>
+        <button id="btnDeleteModalUnregister" class="btn btn-sm" type="button" data-i18n>仅移除</button>
+      </div>
+      <div class="delete-danger-box">
+        <strong data-i18n>🗑 彻底删除本地文件夹（不可恢复）</strong>
+        <div class="muted" data-i18n>将从工作台移除并永久删除整个项目目录，请确认没有未备份的资料。</div>
+        <label class="checkbox-row">
+          <input id="chkConfirmDeleteDisk" type="checkbox" />
+          <span data-i18n>我已知晓风险，确认永久删除磁盘目录</span>
+        </label>
+        <div class="modal-actions">
+          <button id="btnCancelDeleteModal" class="btn btn-sm" type="button" data-i18n>取消</button>
+          <button id="btnDeleteModalPurge" class="btn btn-danger btn-sm" type="button" disabled data-i18n>永久删除目录</button>
+        </div>
       </div>
     </div>
   </div>

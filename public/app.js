@@ -16,6 +16,7 @@ const state = {
   activeDir: sessionStorage.getItem('collabstudio.activeDir'),
   detail: null,
   expandedRoots: new Set(),
+  showArchived: false,
   filterText: '',
   subCardCollapsed: false,
   subModalRootDir: null,
@@ -202,80 +203,69 @@ function applyStageRoutingToUi(project, force = false) {
   }
 }
 
-function renderSidebar() {
-  const list = $('projectList');
-  const q = state.filterText.trim().toLowerCase();
-  list.innerHTML = '';
+function buildProjectGroupEl(p, q, matchedSubs) {
+  const subs = p.subprojects || [];
+  const isRootActive = dirEq(p.dir, state.activeDir);
+  const hasActiveChild = subs.some((s) => dirEq(s.dir, state.activeDir));
+  if (hasActiveChild) state.expandedRoots.add(p.dir);
+  const isExpanded = Boolean(q) || state.expandedRoots.has(p.dir);
+  const prog = subs.length && p.aggregateProgress ? p.aggregateProgress : p.progress;
 
-  for (const p of state.projects) {
-    const subs = p.subprojects || [];
-    const rootMatches = !q || p.state.name.toLowerCase().includes(q) || p.dir.toLowerCase().includes(q);
-    const matchedSubs = q
-      ? subs.filter((s) => s.name.toLowerCase().includes(q) || s.relPath.toLowerCase().includes(q))
-      : subs;
-    if (!rootMatches && !matchedSubs.length) continue;
+  const group = document.createElement('div');
+  group.className = `proj-group${p.archived ? ' is-archived' : ''}`;
 
-    const isRootActive = dirEq(p.dir, state.activeDir);
-    const hasActiveChild = subs.some((s) => dirEq(s.dir, state.activeDir));
-    if (hasActiveChild) state.expandedRoots.add(p.dir);
-    const isExpanded = Boolean(q) || state.expandedRoots.has(p.dir);
-    const prog = subs.length && p.aggregateProgress ? p.aggregateProgress : p.progress;
+  const rootRow = document.createElement('div');
+  rootRow.className = `proj-root-row${isRootActive ? ' active' : ''}${hasActiveChild ? ' has-active-child' : ''}`;
 
-    const group = document.createElement('div');
-    group.className = 'proj-group';
+  const toggleBtn = document.createElement('button');
+  toggleBtn.type = 'button';
+  toggleBtn.className = 'tree-toggle';
+  toggleBtn.textContent = subs.length ? (isExpanded ? '▾' : '▸') : '•';
+  toggleBtn.title = subs.length ? (isExpanded ? t("折叠子项目") : t("展开子项目")) : t("暂无子项目");
+  toggleBtn.onclick = (e) => {
+    e.stopPropagation();
+    if (!subs.length) return;
+    if (state.expandedRoots.has(p.dir)) state.expandedRoots.delete(p.dir);
+    else state.expandedRoots.add(p.dir);
+    renderSidebar();
+  };
 
-    const rootRow = document.createElement('div');
-    rootRow.className = `proj-root-row${isRootActive ? ' active' : ''}${hasActiveChild ? ' has-active-child' : ''}`;
-
-    const toggleBtn = document.createElement('button');
-    toggleBtn.type = 'button';
-    toggleBtn.className = 'tree-toggle';
-    toggleBtn.textContent = subs.length ? (isExpanded ? '▾' : '▸') : '•';
-    toggleBtn.title = subs.length ? (isExpanded ? t("折叠子项目") : t("展开子项目")) : t("暂无子项目");
-    toggleBtn.onclick = (e) => {
-      e.stopPropagation();
-      if (!subs.length) return;
-      if (state.expandedRoots.has(p.dir)) state.expandedRoots.delete(p.dir);
-      else state.expandedRoots.add(p.dir);
-      renderSidebar();
-    };
-
-    const itemBtn = document.createElement('button');
-    itemBtn.type = 'button';
-    itemBtn.className = 'proj-item';
-    itemBtn.innerHTML = `
+  const itemBtn = document.createElement('button');
+  itemBtn.type = 'button';
+  itemBtn.className = 'proj-item';
+  itemBtn.innerHTML = `
       <div class="proj-item-top">
         <span class="proj-item-name" title="${esc(p.dir)}">${esc(p.state.name)}</span>
-        <span class="stage-pill${subs.length ? ' sub-count' : ''}">${subs.length ? t("{0} 子项", subs.length) : t("阶段 {0}", p.state.stage)}</span>
+        <span class="stage-pill${p.archived ? ' archived-pill' : (subs.length ? ' sub-count' : '')}">${p.archived ? t("已归档") : (subs.length ? t("{0} 子项", subs.length) : t("阶段 {0}", p.state.stage))}</span>
       </div>
       <div class="proj-item-sub">
         <span>${p.exists ? t("{0}/{1} 任务", prog.done, prog.total) : t("目录不存在")}</span>
         <span>${p.state.contractFrozen ? t("已冻结") : t("阶段 {0}", p.state.stage)}</span>
       </div>`;
-    itemBtn.onclick = () => selectProject(p.dir);
+  itemBtn.onclick = () => selectProject(p.dir);
 
-    const addBtn = document.createElement('button');
-    addBtn.type = 'button';
-    addBtn.className = 'tree-add-btn';
-    addBtn.textContent = '+';
-    addBtn.title = t("为「{0}」添加或扫描子项目", p.state.name);
-    addBtn.onclick = (e) => {
-      e.stopPropagation();
-      openSubModal(p.dir, p.state.name);
-    };
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'tree-add-btn';
+  addBtn.textContent = '+';
+  addBtn.title = t("为「{0}」添加或扫描子项目", p.state.name);
+  addBtn.onclick = (e) => {
+    e.stopPropagation();
+    openSubModal(p.dir, p.state.name);
+  };
 
-    rootRow.append(toggleBtn, itemBtn, addBtn);
-    group.appendChild(rootRow);
+  rootRow.append(toggleBtn, itemBtn, addBtn);
+  group.appendChild(rootRow);
 
-    if (subs.length && isExpanded) {
-      const subTree = document.createElement('div');
-      subTree.className = 'sub-tree';
-      for (const s of matchedSubs) {
-        const subBtn = document.createElement('button');
-        subBtn.type = 'button';
-        subBtn.className = `sub-node${dirEq(s.dir, state.activeDir) ? ' active' : ''}`;
-        subBtn.title = s.dir;
-        subBtn.innerHTML = `
+  if (subs.length && isExpanded) {
+    const subTree = document.createElement('div');
+    subTree.className = 'sub-tree';
+    for (const s of matchedSubs) {
+      const subBtn = document.createElement('button');
+      subBtn.type = 'button';
+      subBtn.className = `sub-node${dirEq(s.dir, state.activeDir) ? ' active' : ''}`;
+      subBtn.title = s.dir;
+      subBtn.innerHTML = `
           <div class="sub-node-top">
             <span class="sub-node-name">${s.contractFrozen ? `<span class="frozen-dot" title="${t("契约已冻结")}"></span>` : ''}${esc(s.name)}</span>
             <span class="stage-pill">S${s.stage}</span>
@@ -284,13 +274,60 @@ function renderSidebar() {
             <span class="sub-rel">${esc(s.relPath)}</span>
             <span>${s.exists ? `${s.progress.done}/${s.progress.total}` : t("缺失")}</span>
           </div>`;
-        subBtn.onclick = () => selectProject(s.dir);
-        subTree.appendChild(subBtn);
-      }
-      group.appendChild(subTree);
+      subBtn.onclick = () => selectProject(s.dir);
+      subTree.appendChild(subBtn);
     }
+    group.appendChild(subTree);
+  }
 
-    list.appendChild(group);
+  return group;
+}
+
+function renderSidebar() {
+  const list = $('projectList');
+  const q = state.filterText.trim().toLowerCase();
+  list.innerHTML = '';
+
+  const activeItems = [];
+  const archivedItems = [];
+
+  for (const p of state.projects) {
+    const subs = p.subprojects || [];
+    const rootMatches = !q || p.state.name.toLowerCase().includes(q) || p.dir.toLowerCase().includes(q);
+    const matchedSubs = q
+      ? subs.filter((s) => s.name.toLowerCase().includes(q) || s.relPath.toLowerCase().includes(q))
+      : subs;
+    if (!rootMatches && !matchedSubs.length) continue;
+    if (p.archived) archivedItems.push({ p, matchedSubs });
+    else activeItems.push({ p, matchedSubs });
+  }
+
+  for (const { p, matchedSubs } of activeItems) {
+    list.appendChild(buildProjectGroupEl(p, q, matchedSubs));
+  }
+
+  if (archivedItems.length) {
+    const hasActiveInArchive = archivedItems.some(({ p }) =>
+      dirEq(p.dir, state.activeDir) || (p.subprojects || []).some((s) => dirEq(s.dir, state.activeDir))
+    );
+    const expanded = Boolean(q) || state.showArchived || hasActiveInArchive;
+    const sec = document.createElement('div');
+    sec.className = 'archived-section';
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'archived-toggle';
+    toggle.innerHTML = `<span>📦 ${t("已归档项目 ({0})", archivedItems.length)}</span><span>${expanded ? '▾' : '▸'}</span>`;
+    toggle.onclick = () => {
+      state.showArchived = !expanded;
+      renderSidebar();
+    };
+    sec.appendChild(toggle);
+    if (expanded) {
+      for (const { p, matchedSubs } of archivedItems) {
+        sec.appendChild(buildProjectGroupEl(p, q, matchedSubs));
+      }
+    }
+    list.appendChild(sec);
   }
 }
 
@@ -405,6 +442,7 @@ function renderProjectDetail(preserveDoc = true) {
     crumbSep.classList.remove('hidden');
     scopeBadge.textContent = t("子项目 · {0}", p.relPath);
     scopeBadge.className = 'scope-badge sub';
+    $('btnArchiveProj').classList.add('hidden');
     $('btnRemoveProj').textContent = t("移除子项目");
     const siblings = p.siblings || [];
     if (siblings.length > 1) {
@@ -425,9 +463,12 @@ function renderProjectDetail(preserveDoc = true) {
     crumbSep.classList.add('hidden');
     sibSel.classList.add('hidden');
     const subCount = (p.subprojects || []).length;
-    scopeBadge.textContent = subCount ? t("主项目 · {0} 子项", subCount) : t("主项目");
+    const baseScope = subCount ? t("主项目 · {0} 子项", subCount) : t("主项目");
+    scopeBadge.textContent = p.archived ? `${baseScope} · ${t("已归档")}` : baseScope;
     scopeBadge.className = 'scope-badge';
-    $('btnRemoveProj').textContent = t("移除");
+    $('btnArchiveProj').classList.remove('hidden');
+    $('btnArchiveProj').textContent = p.archived ? t("取消归档") : t("归档");
+    $('btnRemoveProj').textContent = t("删除");
   }
 
   const frozen = Boolean(p.state.contractFrozen);
@@ -644,7 +685,8 @@ async function loadProjects(keepDir = true) {
     }
   }
   if (!keepDir || !findDirInProjects(state.activeDir)) {
-    state.activeDir = state.projects[0]?.dir || null;
+    const firstActive = state.projects.find((p) => !p.archived);
+    state.activeDir = firstActive?.dir || state.projects[0]?.dir || null;
   }
   renderSidebar();
   if (state.activeDir) await selectProject(state.activeDir, keepDir);
@@ -821,6 +863,74 @@ $('btnToggleFreeze').onclick = () => {
   const frozen = !state.detail?.project?.state?.contractFrozen;
   patchState({ contractFrozen: frozen, gates: { g3: frozen } }).then(() => showToast(frozen ? t("接口契约已冻结") : t("已切换回草案")));
 };
+async function toggleArchiveCurrentProject(forceArchive = null) {
+  const p = state.detail?.project;
+  if (!p || p.isSubproject) return;
+  const nextArchived = forceArchive === null ? !p.archived : Boolean(forceArchive);
+  try {
+    await api('/api/projects/archive', {
+      method: 'POST',
+      body: JSON.stringify({ dir: p.dir, archived: nextArchived })
+    });
+    if (nextArchived) {
+      const nextActive = state.projects.find((item) => !item.archived && !dirEq(item.dir, p.dir));
+      state.activeDir = nextActive?.dir || p.dir;
+      await loadProjects(true);
+      showToast(t("已归档项目：{0}", p.state.name));
+    } else {
+      await loadProjects(true);
+      showToast(t("已恢复项目：{0}", p.state.name));
+    }
+  } catch (e) {
+    showToast(e.message);
+  }
+}
+
+function openDeleteProjModal(p) {
+  $('deleteProjTarget').textContent = `${p.state.name} — ${p.dir}`;
+  $('btnDeleteModalArchive').textContent = p.archived ? t("取消归档") : t("归档");
+  $('chkConfirmDeleteDisk').checked = false;
+  $('btnDeleteModalPurge').disabled = true;
+  $('deleteProjBackdrop').classList.remove('hidden');
+}
+
+function closeDeleteProjModal() {
+  $('deleteProjBackdrop').classList.add('hidden');
+}
+
+$('btnArchiveProj').onclick = () => toggleArchiveCurrentProject();
+$('btnCloseDeleteModal').onclick = closeDeleteProjModal;
+$('btnCancelDeleteModal').onclick = closeDeleteProjModal;
+$('chkConfirmDeleteDisk').onchange = (e) => {
+  $('btnDeleteModalPurge').disabled = !e.target.checked;
+};
+$('btnDeleteModalArchive').onclick = async () => {
+  closeDeleteProjModal();
+  await toggleArchiveCurrentProject();
+};
+$('btnDeleteModalUnregister').onclick = async () => {
+  const p = state.detail?.project;
+  if (!p || p.isSubproject) return;
+  closeDeleteProjModal();
+  await api(`/api/projects?dir=${encodeURIComponent(p.dir)}`, { method: 'DELETE' });
+  state.activeDir = null;
+  await loadProjects(false);
+  showToast(t("已从列表移除：{0}", p.state.name));
+};
+$('btnDeleteModalPurge').onclick = async () => {
+  const p = state.detail?.project;
+  if (!p || p.isSubproject || !$('chkConfirmDeleteDisk').checked) return;
+  closeDeleteProjModal();
+  try {
+    await api(`/api/projects?dir=${encodeURIComponent(p.dir)}&deleteFiles=1`, { method: 'DELETE' });
+    state.activeDir = null;
+    await loadProjects(false);
+    showToast(t("已永久删除项目目录：{0}", p.state.name));
+  } catch (e) {
+    showToast(e.message);
+  }
+};
+
 $('btnRemoveProj').onclick = async () => {
   const p = state.detail?.project;
   if (!p) return;
@@ -832,10 +942,7 @@ $('btnRemoveProj').onclick = async () => {
     showToast(t("已移除子项目：{0}", p.state.name));
     return;
   }
-  if (!confirm(t("仅从 CollabStudio 列表移除该主项目，不会删除磁盘文件，确定吗？"))) return;
-  await api(`/api/projects?dir=${encodeURIComponent(state.activeDir)}`, { method: 'DELETE' });
-  state.activeDir = null;
-  await loadProjects(false);
+  openDeleteProjModal(p);
 };
 $('btnQuit').onclick = async () => {
   if (window.electronAPI) return window.electronAPI.quit();

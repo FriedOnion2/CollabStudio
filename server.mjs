@@ -5,7 +5,7 @@ import path from 'node:path';
 import { execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
-  ALLOWED_DOCS, loadRegistry, registerProject, unregisterProject,
+  ALLOWED_DOCS, loadRegistry, registerProject, archiveProject, unregisterProject, deleteProjectFiles,
   scaffoldProject, inspectProject, inspectScope, findParentProject,
   registerSubproject, unregisterSubproject, scanSubprojectCandidates, writeProjectState
 } from './lib/store.mjs';
@@ -520,11 +520,24 @@ async function handleRequest(req, res) {
       return sendJson(res, 200, { project, prompts: buildPrompts(project) });
     }
 
+    if (p === '/api/projects/archive' && req.method === 'POST') {
+      const { dir, archived = true } = await readBody(req);
+      if (!dir) return sendJson(res, 400, { error: t("缺少 dir 参数") });
+      const entry = archiveProject(dir, Boolean(archived));
+      return sendJson(res, 200, { ok: true, entry });
+    }
+
     if (p === '/api/projects' && req.method === 'DELETE') {
       const dir = url.searchParams.get('dir');
+      const deleteFiles = url.searchParams.get('deleteFiles') === '1';
       if (!dir) return sendJson(res, 400, { error: t("缺少 dir 参数") });
+      stopDeliverableScript(dir);
+      if (deleteFiles) {
+        deleteProjectFiles(dir);
+        return sendJson(res, 200, { ok: true, deletedFiles: true });
+      }
       unregisterProject(dir);
-      return sendJson(res, 200, { ok: true });
+      return sendJson(res, 200, { ok: true, deletedFiles: false });
     }
 
     if (p === '/api/subprojects/scan' && req.method === 'GET') {
@@ -626,10 +639,40 @@ async function handleRequest(req, res) {
 
 // Deliverables can contain arbitrary project JavaScript. Serve them from
 // another origin with no access to the desktop API or its preload bridge.
-const previewServer = http.createServer((req, res) => {
+function resolvePreviewRequest(req) {
   const requestPath = new URL(req.url, 'http://localhost').pathname;
-  const [, mountId, relPath] = requestPath.match(/^\/preview\/([^/]+)\/(.*)$/) || [];
-  const resolved = ['GET', 'HEAD'].includes(req.method) && resolvePreviewFile(mountId, relPath);
+  const directMatch = requestPath.match(/^\/preview\/([^/]+)\/(.*)$/);
+  if (directMatch) {
+    return resolvePreviewFile(directMatch[1], directMatch[2]);
+  }
+  // Fallback for built apps that emit root-absolute asset URLs (e.g. /assets/...)
+  // when opened under /preview/<mountId>/<subDir>/index.html.
+  const referer = req.headers.referer;
+  if (!referer) return null;
+  let refPath = '';
+  try {
+    refPath = new URL(referer).pathname;
+  } catch {
+    return null;
+  }
+  const refMatch = refPath.match(/^\/preview\/([^/]+)\/(.*)$/);
+  if (!refMatch) return null;
+  const [, mountId, refRel] = refMatch;
+  const cleanAsset = requestPath.replace(/^\/+/, '');
+  if (!cleanAsset) return null;
+  const refDir = path.posix.dirname(refRel);
+  const candidates = refDir && refDir !== '.'
+    ? [`${refDir}/${cleanAsset}`, cleanAsset]
+    : [cleanAsset];
+  for (const candidate of candidates) {
+    const found = resolvePreviewFile(mountId, candidate);
+    if (found) return found;
+  }
+  return null;
+}
+
+const previewServer = http.createServer((req, res) => {
+  const resolved = ['GET', 'HEAD'].includes(req.method) && resolvePreviewRequest(req);
   if (!resolved) {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     return res.end('Preview file not found');

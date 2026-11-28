@@ -16,6 +16,7 @@ export function createPreviewPanel({ getActiveDir, onSendRework, onFeedbackSaved
     data: null,
     selectedUrl: '',
     selectedLabel: '',
+    userPicked: false,
     viewport: 'auto',
     activeScript: null,
     showRecent: false
@@ -194,6 +195,7 @@ export function createPreviewPanel({ getActiveDir, onSendRework, onFeedbackSaved
     if (state.dir !== dir) {
       state.selectedUrl = '';
       state.selectedLabel = '';
+      state.userPicked = false;
       state.data = null;
     }
     state.dir = dir;
@@ -201,6 +203,7 @@ export function createPreviewPanel({ getActiveDir, onSendRework, onFeedbackSaved
       state.data = null;
       state.selectedUrl = '';
       state.selectedLabel = '';
+      state.userPicked = false;
       state.activeScript = null;
       updateTabBadge();
       renderSelectAndFrame(false);
@@ -213,9 +216,11 @@ export function createPreviewPanel({ getActiveDir, onSendRework, onFeedbackSaved
       state.data = data;
       state.activeScript = data.activeScript || null;
       const entries = data.htmlEntries || [];
-      const stillValid = entries.some((e) => e.previewPath === state.selectedUrl)
+      const currentEntry = entries.find((e) => e.previewPath === state.selectedUrl);
+      const stillValid = Boolean(currentEntry)
         || (state.selectedUrl && !state.selectedLabel.endsWith('.html') && state.selectedLabel === state.selectedUrl);
-      if (!stillValid) {
+      const promoteNewBuild = !state.userPicked && currentEntry?.group === 'prototype' && entries[0]?.group === 'build';
+      if (!stillValid || promoteNewBuild) {
         state.selectedUrl = entries[0]?.previewPath || '';
         state.selectedLabel = entries[0]?.relPath || '';
       }
@@ -338,6 +343,7 @@ export function createPreviewPanel({ getActiveDir, onSendRework, onFeedbackSaved
       if (u && /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(u.trim())) {
         state.selectedUrl = u.trim();
         state.selectedLabel = u.trim();
+        state.userPicked = true;
       } else if (u) {
         showToast(t("请输入合法的本机 http://localhost 或 http://127.0.0.1 地址"));
       }
@@ -346,6 +352,7 @@ export function createPreviewPanel({ getActiveDir, onSendRework, onFeedbackSaved
     }
     state.selectedUrl = e.target.value;
     state.selectedLabel = e.target.selectedOptions[0]?.dataset?.label || e.target.value;
+    state.userPicked = true;
     renderSelectAndFrame(true);
   };
 
